@@ -13,6 +13,7 @@ from instagrapi import Client as InstagrapiClient
 from instagrapi.exceptions import ClientLoginRequired
 import base64
 from datetime import datetime
+import aiohttp
 
 # load .env file
 load_dotenv()
@@ -380,17 +381,27 @@ async def generate_image(description: str) -> Optional[bytes]:
 
 
 class InstagramAgentClient:
-    """Instagram client that manages agent interactions"""
+    """Instagram client that manages media posting to Instagram"""
     
     def __init__(self, agents_mapping: Dict[str, Tuple[Agent, AgentMemory]]):
         """Initialize the Instagram client"""
         self.agents_mapping = agents_mapping
         self.is_running = False
-        self.polling_interval = 600  # seconds between checks for new messages
         
         # Instagram API credentials from .env 
         self.username = os.getenv("INSTAGRAM_USERNAME")
         self.password = os.getenv("INSTAGRAM_PASSWORD")
+        
+        # Instagram Graph API credentials from .env
+        self.instagram_account_id = os.getenv("INSTAGRAM_ACCOUNT_ID")
+        self.instagram_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
+        self.instagram_graph_url = "https://graph.instagram.com/"
+        
+        # FTP credentials from .env
+        self.ftp_server = os.getenv("FTP_SERVER")
+        self.ftp_username = os.getenv("FTP_USERNAME")
+        self.ftp_password = os.getenv("FTP_PASSWORD")
+        self.http_server = os.getenv("HTTP_SERVER")
         
         # Instagram API client
         self.api = None
@@ -410,9 +421,6 @@ class InstagramAgentClient:
             # Try to load session if it exists
             if os.path.exists(self.session_storage):
                 logger.info("Loading Instagram session from file")
-                # with open(self.session_storage, 'r') as f:
-                #     session_data = json.load(f)
-                #     self.api.load_settings(session_data)
                 self.api.load_settings(self.session_storage)
                 
                 # Try reusing the session
@@ -458,188 +466,202 @@ class InstagramAgentClient:
         except Exception as e:
             logger.error(f"Error disconnecting from Instagram: {e}")
     
-    async def process_message(self, thread_id, user_id, username, text):
-        """Process a message from Instagram"""
-        logger.info("Instagram client processing message...")
-        # Use the first agent for now (in a real implementation, could have Instagram-specific agents)
-        agent_name = list(self.agents_mapping.keys())[0]
-        agent, memory = self.agents_mapping[agent_name]
-        
-        logger.info(f"[Instagram] Processing message from {username}: {text}")
-        
-        # Add message to memory
-        memory.conversation_history.append({
-            "role": "user",
-            "content": text,
-            "user_id": user_id,
-            "username": username,
-            "timestamp": "now",  # In a real implementation, use actual timestamp
-            "client": "instagram"
-        })
-        
-        # Create input items
-        input_items = [{"content": text, "role": "user"}]
-        
-        # Set up hooks
-        hooks = InstagramHooks()
-        
+    async def upload_file_to_ftp(self, file_path):
+        """Upload a file to FTP server and return the URL"""
+        logger.info(f"Uploading file to FTP server: {file_path}")
         try:
-            # Process with agent
-            result = await Runner.run(
-                agent,
-                input_items,
-                context=memory,
-                hooks=hooks
-            )
+            # Connect to the FTP server
+            from ftplib import FTP
+            ftp = FTP(self.ftp_server)
+            ftp.login(user=self.ftp_username, passwd=self.ftp_password)
             
-            # Get response
-            response = result.final_output
+            # Upload to this directory
+            remote_dir = '/domains/agntc.io/public_html/media'
+            logger.info(f"Uploading file to {self.ftp_server}{remote_dir}")
+            ftp.cwd(remote_dir)
             
-            # Check if we need to generate an image
-            if hooks.image_description:
-                logger.info(f"[Instagram] Generating image for description: {hooks.image_description}")
-                image_bytes = await generate_image(hooks.image_description)
+            # Open the file in binary mode and upload it
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, lambda: self._upload_file(ftp, file_path))
+            
+            # Close the FTP connection
+            ftp.quit()
+            
+            # Return the URL of the uploaded file
+            file_name = os.path.basename(file_path)
+            file_url = f'https://{self.http_server}/media/{file_name}'
+            logger.info(f"File uploaded successfully. URL: {file_url}")
+            return file_url
+        except Exception as e:
+            logger.error(f"Error uploading file to FTP: {e}")
+            return None
+
+    def _upload_file(self, ftp, file_path):
+        """Helper method to upload file to FTP (runs in executor)"""
+        with open(file_path, 'rb') as file:
+            file_name = os.path.basename(file_path)
+            ftp.storbinary(f'STOR {file_name}', file)
+    
+    async def post_media(self, file_url, caption=''):
+        """Post media (image or video) to Instagram"""
+        logger.info(f"Posting media to Instagram: {file_url}")
+        try:
+            url = f"{self.instagram_graph_url}{self.instagram_account_id}/media"
+            param = {
+                'access_token': self.instagram_access_token,
+                'caption': caption
+            }
+            
+            if file_url.endswith('.jpg') or file_url.endswith('.jpeg') or file_url.endswith('.png'):
+                logger.info("Posting image...")
+                param['image_url'] = file_url
+            elif file_url.endswith('.mp4'):
+                logger.info("Posting video...")
+                param['media_type'] = 'REELS'
+                param['video_url'] = file_url
+                param['share_to_feed'] = 'true'
+            
+            # Make the API request
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, params=param) as response:
+                    result = await response.json()
+                    logger.info(f"Media posted with result: {result}")
+                    return result
+        except Exception as e:
+            logger.error(f"Error posting media to Instagram: {e}")
+            return None
+    
+    async def post_reel(self, video_url, media_type='REELS'):
+        """Post a reel to Instagram"""
+        logger.info(f"Posting reel to Instagram: {video_url}")
+        try:
+            url = f"{self.instagram_graph_url}{self.instagram_account_id}/media"
+            param = {
+                'access_token': self.instagram_access_token,
+                'video_url': video_url,
+                'media_type': media_type,
+                'thumb_offset': '10'  # thumbnail offset in milliseconds
+            }
+            
+            # Make the API request
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, params=param) as response:
+                    result = await response.json()
+                    logger.info(f"Reel posted with result: {result}")
+                    return result
+        except Exception as e:
+            logger.error(f"Error posting reel to Instagram: {e}")
+            return None
+    
+    async def status_of_upload(self, container_id):
+        """Check the status of an upload"""
+        logger.info(f"Checking status of upload: {container_id}")
+        try:
+            url = f"{self.instagram_graph_url}{container_id}"
+            param = {
+                'access_token': self.instagram_access_token,
+                'fields': 'status_code, status'
+            }
+            
+            # Make the API request
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=param) as response:
+                    result = await response.json()
+                    logger.info(f"Upload status: {result}")
+                    return result
+        except Exception as e:
+            logger.error(f"Error checking upload status: {e}")
+            return None
+    
+    async def publish_container(self, container_id):
+        """Publish a container once it's ready"""
+        logger.info(f"Publishing container: {container_id}")
+        try:
+            url = f"{self.instagram_graph_url}{self.instagram_account_id}/media_publish"
+            param = {
+                'access_token': self.instagram_access_token,
+                'creation_id': container_id
+            }
+            
+            # Make the API request
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, params=param) as response:
+                    result = await response.json()
+                    logger.info(f"Container published with result: {result}")
+                    return result
+        except Exception as e:
+            logger.error(f"Error publishing container: {e}")
+            return None
+    
+    async def post_to_instagram(self, file_url, caption=''):
+        """Post content to Instagram (full process)"""
+        logger.info(f"Posting content to Instagram: {file_url}")
+        try:
+            # Post the media
+            response = await self.post_media(file_url=file_url, caption=caption)
+            if not response or 'id' not in response:
+                logger.error(f"Failed to post media: {response}")
+                return None
+            
+            container_id = response['id']
+            logger.info(f"Uploaded media with container_id: {container_id}")
+            
+            # Check status until ready or timeout
+            upload_complete = False
+            counter = 0
+            while not upload_complete and counter < 25:  # stop after ~2min
+                # Check status of uploaded container
+                response = await self.status_of_upload(container_id)
                 
-                if image_bytes:
-                    # Send the image first
-                    await self.send_image(thread_id, image_bytes, caption=hooks.image_description[:100])
+                if not response:
+                    logger.error("Failed to get upload status")
+                    break
                     
-                    # Then send the text response
-                    await self.send_response(thread_id, response)
+                if response.get('status_code') == 'FINISHED':
+                    logger.info('Upload complete, ready to publish!')
+                    upload_complete = True
                 else:
-                    # If image generation failed, just send the text with a note
-                    error_msg = "I tried to generate an image for you, but there was an issue. "
-                    await self.send_response(thread_id, error_msg + response)
+                    logger.info(f'Upload not ready. Status: {response.get("status_code", "Unknown")}, {response.get("status", "Unknown")}')
+                    logger.info('Waiting 5 seconds...')
+                    counter += 1
+                    await asyncio.sleep(5)
+            
+            if upload_complete:
+                # Publish the container
+                response = await self.publish_container(container_id)
+                logger.info(f"Container published: {response}")
+                return response
             else:
-                # Just send the text response
-                await self.send_response(thread_id, response)
-            
-            # Log the agent's response
-            logger.info(f"[Instagram] Agent {agent.name} response to {username}: {response}")
-            
-            return result.to_input_list()
-        
+                logger.error("Upload container to Instagram FAILED or timed out")
+                return None
+                
         except Exception as e:
-            logger.error(f"[Instagram] Error processing message: {e}")
-            await self.send_response(thread_id, "I encountered an error while processing your message. Please try again later.")
+            logger.error(f"Error in post_to_instagram: {e}")
+            return None
     
-    async def send_response(self, thread_id, text):
-        """Send a response message to Instagram"""
-        logger.info("Instagram client sending response...")
+    async def get_publishing_limit(self):
+        """Get the publishing limit status"""
+        logger.info("Getting publishing limit...")
         try:
-            # Use instagrapi to send the message
-            # Convert async function to run in a thread pool executor
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None, 
-                lambda: self.api.direct_send(text, thread_ids=[thread_id])
-            )
+            url = f"{self.instagram_graph_url}{self.instagram_account_id}/content_publishing_limit"
+            param = {
+                'access_token': self.instagram_access_token
+            }
             
-            logger.info(f"[Instagram] Sent response to thread {thread_id}: {text[:30]}...")
+            # Make the API request
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=param) as response:
+                    result = await response.json()
+                    if 'data' in result and len(result['data']) > 0:
+                        quota_usage = result['data'][0].get('quota_usage', 'Unknown')
+                        logger.info(f"Instagram daily quota usage: {quota_usage}")
+                    return result
         except Exception as e:
-            logger.error(f"[Instagram] Error sending response: {e}")
-    
-    async def send_image(self, thread_id, image_bytes, caption="Generated image"):
-        """Send an image to Instagram"""
-        logger.info("Instagram client sending image...")
-        try:
-            # Create a temporary file for the image
-            image_path = os.path.join(os.path.dirname(__file__), "temp_image.jpg")
-            
-            # Write the image bytes to the file
-            with open(image_path, "wb") as f:
-                f.write(image_bytes)
-            
-            # Use instagrapi to send the image
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None, 
-                lambda: self.api.direct_send_photo(
-                    path=image_path,
-                    thread_ids=[thread_id],
-                    text=caption
-                )
-            )
-            
-            # Clean up the temporary file
-            os.remove(image_path)
-            
-            logger.info(f"[Instagram] Sent image to thread {thread_id} with caption: {caption}")
-        except Exception as e:
-            logger.error(f"[Instagram] Error sending image: {e}")
-    
-    async def check_for_messages(self):
-        """Check for new messages on Instagram"""
-        logger.info("Instagram client checking for messages...")
-        try:
-            # Use instagrapi to get inbox threads
-            loop = asyncio.get_event_loop()
-            # inbox = await loop.run_in_executor(
-            #     None,
-            #     lambda: self.api.direct_inbox()
-            # )
-            
-            # Also check pending inbox (message requests)
-            pending = await loop.run_in_executor(
-                None,
-                lambda: self.api.direct_pending_inbox()
-            )
-            
-            # Process both regular and pending threads
-            for thread_type, threads in [("pending", pending.threads)]:
-                for thread in threads:
-                    # Skip threads with no messages
-                    if not thread.messages or len(thread.messages) == 0:
-                        continue
-                    
-                    # Get the latest message
-                    latest_message = thread.messages[0]
-                    
-                    # Skip messages from the bot itself (identified by user_id)
-                    if latest_message.user_id == self.api.user_id:
-                        continue
-                    
-                    # Check if the message is new (within the last polling interval)
-                    # This is a simple implementation - could be improved with proper tracking
-                    message_timestamp = latest_message.timestamp
-                    current_time = datetime.datetime.now()
-                    message_age = (current_time - message_timestamp).total_seconds()
-                    
-                    if message_age < self.polling_interval:
-                        # This is a new message, process it
-                        logger.info(f"[Instagram] New message in thread {thread.id} from {latest_message.user_id}")
-                        
-                        # Get the username of the sender
-                        username = await loop.run_in_executor(
-                            None,
-                            lambda: self.api.username_from_user_id(latest_message.user_id)
-                        )
-                        
-                        # Process the message
-                        await self.process_message(
-                            thread.id,
-                            latest_message.user_id,
-                            username, 
-                            latest_message.text
-                        )
-                        
-                        # If this is a pending thread (message request), accept it
-                        if thread_type == "pending":
-                            await loop.run_in_executor(
-                                None,
-                                lambda: self.api.direct_thread_approve(thread.id)
-                            )
-                            logger.info(f"[Instagram] Approved message request from {username}")
-            
-        except ClientLoginRequired:
-            # Session expired, try to login again
-            logger.warning("[Instagram] Session expired, attempting to login again")
-            self.api.login(self.username, self.password)
-        except Exception as e:
-            logger.error(f"[Instagram] Error checking messages: {e}")
+            logger.error(f"Error getting publishing limit: {e}")
+            return None
     
     async def run(self):
-        """Run the Instagram client message polling loop"""
+        """Run the Instagram client"""
         if not self.username or not self.password:
             logger.error("Instagram credentials not found in environment variables")
             return
@@ -648,18 +670,16 @@ class InstagramAgentClient:
             logger.error("Failed to connect to Instagram. Client will not run.")
             return
         
-        logger.info("Starting Instagram message polling...")
+        logger.info("Instagram client started. Ready to post media.")
         
+        # Keep the client running to maintain the session
         while self.is_running:
             try:
-                # await self.check_for_messages()
-                logger.info("Instagram pretending to check for messages...")
-                
-                logger.info(f"Instagram sleeping for {self.polling_interval} seconds")
-                await asyncio.sleep(self.polling_interval)
+                # Just keep the session alive, no need to poll for messages
+                await asyncio.sleep(60)  # Sleep for a minute
             except Exception as e:
-                logger.error(f"Error in Instagram polling loop: {e}")
-                await asyncio.sleep(self.polling_interval)
+                logger.error(f"Error in Instagram client run loop: {e}")
+                await asyncio.sleep(60)
         
         await self.disconnect()
 
@@ -673,7 +693,7 @@ async def main():
     agents_mapping_discord = {}
     agents_mapping_instagram = {}
     
-    # Initialize Assistant Bot agent for Discord
+    # Initialize Assistant Bot agent for Discord and Instagram
     try:
         assistantbot_agent_discord, assistantbot_memory_discord = await initialize_agent(
             character_file, 
