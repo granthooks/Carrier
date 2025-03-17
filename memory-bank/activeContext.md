@@ -4,8 +4,9 @@
 * Implementing the runtime loop architecture for autonomous AI Agents
 * Adapting the ElizaOS patterns from Node.js to Python
 * Establishing core architectural components
-* Developing Discord client integration for autonomous agent interactions
-* Testing and refining the Discord integration with different character files
+* Developing multi-client integrations for autonomous agent interactions
+* Implementing Instagram client integration for media posting capabilities
+* Testing and refining the Discord and Instagram integrations with different character files
 
 ## Recent Changes
 * March 13, 2025: Created memory bank directory and initialized core documentation files
@@ -18,11 +19,19 @@
 * March 14, 2025: Implemented discord_agent.py script for Discord integration using discord.py
 * March 14, 2025: Created tifa_agent.py as a simpler CLI-based agent for testing
 * March 14, 2025: Integrated Agent framework with Discord events for message processing
+* March 15, 2025: Implemented instagram_client.py for Instagram Graph API integration
+* March 16, 2025: Created test_instagram_cli.py for testing Instagram client functionality
+* March 16, 2025: Added Instagram hooks for agent runtime integration
+* March 17, 2025: Integrated Instagram client with Agent framework for media posting capabilities
+* March 17, 2025: Updated run_agent.py to support concurrent Discord and Instagram client operation
 
 ## Next Steps
-* Test the Discord integration with the Tifa character and assistantbot
-* Refine the Discord client based on testing feedback
+* Test the Discord and Instagram integrations with the Tifa character and assistantbot
+* Refine the Discord and Instagram clients based on testing feedback
 * Extend Discord integration to support multiple agents and channels
+* Enhance Instagram client with additional media posting capabilities
+* Implement error handling and reconnection logic for Instagram client
+* Optimize FTP file upload process for Instagram media
 * Begin implementation of additional Agent Runtime class features
 * Develop the Message Manager component for more complex processing
 * Create the State Manager for more comprehensive context composition
@@ -38,9 +47,12 @@
 * The API layer will be implemented using FastAPI
 * Database storage will use SQLAlchemy with PostgreSQL and vector extensions
 * Discord integration uses discord.py library
-* Discord agents run as background processes listening for events
+* Instagram integration uses Instagram Graph API
+* FTP server is used for media file uploads before Instagram posting
+* Discord and Instagram clients run concurrently as background processes
 * Agents respond when mentioned/tagged in Discord channels
-* Discord credentials are loaded from the existing .env file
+* Instagram client provides media posting capabilities
+* Discord and Instagram credentials are loaded from the existing .env file
 * Agent memory is maintained using the AgentMemory dataclass
 * Runtime hooks implement the 7-step process for message handling
 
@@ -52,13 +64,16 @@
 * Security measures for agent tool usage and data privacy
 * Efficient handling of Discord message events and rate limiting
 * Multi-agent management for different Discord channels or servers
-* Handling long-running Discord connections and reconnection strategies
-* Managing Discord API rate limits in high-traffic environments
+* Handling long-running Discord and Instagram connections and reconnection strategies
+* Managing Discord and Instagram API rate limits in high-traffic environments
+* Optimizing media file uploads for Instagram posting
+* Handling Instagram API publishing limits and quotas
+* Implementing robust error handling for Instagram media posting
 * Optimizing memory storage for efficient context retrieval
 
 ## Notes
-The project has moved from planning to implementation, with the core Discord client integration now in place. The discord_agent.py script implements the connection to Discord using discord.py, and the Agent class from the Carrier framework handles message processing and response generation.
+The project has moved from planning to implementation, with the core Discord and Instagram client integrations now in place. The discord_agent.py script implements the connection to Discord using discord.py, while the instagram_client.py script implements the connection to Instagram using the Instagram Graph API. The Agent class from the Carrier framework handles message processing and response generation for both clients.
 
 The implementation follows the 7-step runtime loop outlined in the project brief, with each step mapped to specific components in the Python codebase. Runtime hooks are used to implement the various stages of message processing, action execution, evaluation, and memory storage.
 
-The current implementation of Discord integration provides a strong foundation for further development of the Carrier framework, with the core agent runtime pattern now demonstrated in a practical application. The next steps will focus on refining the implementation and extending it to support more complex features like multi-agent management and advanced tool usage.
+The current implementation of Discord and Instagram integrations provides a strong foundation for further development of the Carrier framework, with the core agent runtime pattern now demonstrated in practical applications. The Discord client enables conversational interactions in chat channels, while the Instagram client provides media posting capabilities. The next steps will focus on refining these implementations and extending them to support more complex features like multi-agent management, advanced tool usage, and enhanced media handling.

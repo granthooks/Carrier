@@ -17,11 +17,13 @@ graph TD
     D --> G
     E --> G
     
-    H[Client Interfaces] --> A
+    H1[Discord Client] --> A
+    H2[Instagram Client] --> A
+    H3[Other Clients] -.-> A
     A --> I[External Tools]
 ```
 
-The architecture implements a processing pipeline that takes user inputs from various clients, processes them through a series of steps, and produces agent responses with potential actions.
+The architecture implements a processing pipeline that takes user inputs from various clients, processes them through a series of steps, and produces agent responses with potential actions. The multi-client design allows agents to interact through different channels while maintaining a consistent processing approach.
 
 ## Key Technical Decisions
 
@@ -142,6 +144,7 @@ The central coordinator that manages the entire system:
 - Manages the state
 - Coordinates action execution
 - Handles evaluation and memory storage
+- Manages multiple client interfaces
 
 ### Message Manager
 Handles all aspects of message processing:
@@ -155,24 +158,28 @@ Manages the agent's state:
 - Composes state from various sources
 - Retrieves relevant history and context
 - Manages conversation flow
+- Tracks client-specific context
 
 ### Action Manager
 Handles the execution of actions:
 - Validates action requests
 - Executes actions using appropriate tools
 - Returns results to the runtime
+- Supports client-specific actions
 
 ### Evaluation System
 Assesses the quality of responses:
 - Applies evaluators to agent responses
 - Triggers improvements when necessary
 - Provides feedback for learning
+- Adapts evaluation to client context
 
 ### Memory System
 Manages persistent storage of interactions:
 - Stores conversation history
 - Retrieves relevant memories
 - Provides context for state composition
+- Tracks client source in memory objects
 
 ### Provider System
 Integrates with external LLM services:
@@ -180,11 +187,30 @@ Integrates with external LLM services:
 - Handles rate limiting and fallbacks
 - Processes prompt templates
 
+### Discord Client
+Handles Discord-specific interactions:
+- Connects to Discord using discord.py
+- Processes message events
+- Detects mentions and tags
+- Sends responses to Discord channels
+- Implements Discord-specific hooks
+
+### Instagram Client
+Handles Instagram-specific interactions:
+- Connects to Instagram using Graph API
+- Uploads media files via FTP
+- Posts content to Instagram
+- Manages publishing limits
+- Implements Instagram-specific hooks
+
 ## Data Flow
+
+### Discord Client Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client
+    participant Discord
+    participant DiscordClient
     participant Runtime
     participant MessageManager
     participant StateManager
@@ -193,7 +219,9 @@ sequenceDiagram
     participant Evaluator
     participant MemorySystem
     
-    Client->>Runtime: Send Message
+    Discord->>DiscordClient: Message Event
+    DiscordClient->>DiscordClient: Detect Mention
+    DiscordClient->>Runtime: Process Message
     Runtime->>MessageManager: Process Message
     MessageManager->>MemorySystem: Store Message
     Runtime->>StateManager: Compose State
@@ -206,10 +234,39 @@ sequenceDiagram
     Runtime->>Evaluator: Evaluate Response
     Evaluator->>Runtime: Return Evaluation
     Runtime->>MemorySystem: Store Response
-    Runtime->>Client: Return Response
+    Runtime->>DiscordClient: Return Response
+    DiscordClient->>Discord: Send Message
 ```
 
-The flow begins with a message received from a client interface. This message is processed through the pipeline, with each component performing its specific role. The final response is then sent back to the client, with the entire interaction stored in memory.
+### Instagram Client Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant InstagramClient
+    participant FTPServer
+    participant InstagramAPI
+    participant Runtime
+    participant ActionManager
+    participant MemorySystem
+    
+    User->>InstagramClient: Request Media Post
+    InstagramClient->>FTPServer: Upload Media File
+    FTPServer->>InstagramClient: Return File URL
+    InstagramClient->>InstagramAPI: Create Media Container
+    InstagramAPI->>InstagramClient: Return Container ID
+    InstagramClient->>InstagramAPI: Check Status
+    InstagramAPI->>InstagramClient: Return Status
+    InstagramClient->>InstagramAPI: Publish Container
+    InstagramAPI->>InstagramClient: Return Result
+    InstagramClient->>Runtime: Log Action
+    Runtime->>ActionManager: Process Action
+    ActionManager->>Runtime: Return Result
+    Runtime->>MemorySystem: Store Action
+    InstagramClient->>User: Return Result
+```
+
+The flow begins with a message or action request received from a client interface. This input is processed through the pipeline, with each component performing its specific role based on the client type. For Discord, this involves conversational interactions, while Instagram focuses on media posting capabilities. The final response or action result is then sent back to the appropriate client, with the entire interaction stored in memory.
 
 ## API Design
 
@@ -224,6 +281,19 @@ async def receive_message(
     file: Optional[UploadFile] = None
 ):
     # Process message and return response
+```
+
+### Media API
+Provides endpoints for media operations:
+
+```python
+@app.post("/{agent_id}/media")
+async def post_media(
+    agent_id: str,
+    media_file: UploadFile,
+    caption: Optional[str] = None
+):
+    # Upload and post media to Instagram
 ```
 
 ### Agent Configuration API
@@ -248,27 +318,41 @@ async def register_tool(tool_config: ToolConfig):
     # Register a new tool for use by agents
 ```
 
+### Client Configuration API
+Allows for client-specific configuration:
+
+```python
+@app.post("/clients/{client_id}/config")
+async def configure_client(client_id: str, config: ClientConfig):
+    # Configure a specific client interface
+```
+
 ## Security Considerations
 
 1. **Authentication and Authorization**
    - Token-based authentication for API access
    - Role-based access control for agent management
    - Fine-grained permissions for tool usage
+   - Client-specific access tokens (Discord token, Instagram token)
 
 2. **Data Protection**
    - Encryption of sensitive data in transit and at rest
    - Configurable data retention policies
    - Access controls for memory retrieval
+   - Secure handling of media files
 
 3. **Input Validation**
    - Strict validation of all inputs using Pydantic
    - Prevention of prompt injection attacks
    - Sanitization of user inputs
+   - Media file validation and scanning
 
 4. **Action Restrictions**
    - Configurable limitations on tool usage
    - Approval workflows for sensitive actions
    - Validation of action parameters
+   - Rate limiting for API calls to external services
+   - Publishing limits for Instagram posts
 
 ## Scalability Approach
 
@@ -294,3 +378,7 @@ async def register_tool(tool_config: ToolConfig):
 
 ## Notes
 The Carrier system architecture adapts the core concepts from ElizaOS while leveraging Python's ecosystem. The focus is on creating a modular, extensible framework that can support a wide range of agent types and use cases while maintaining a consistent approach to message processing, state management, and tool usage.
+
+The multi-client architecture demonstrates the flexibility of the framework, allowing agents to interact through different channels (Discord for conversational interactions, Instagram for media posting) while sharing the same core processing pipeline. Each client implementation follows the same pattern of hooks and event handling, but with client-specific adaptations for the unique requirements of each platform.
+
+The Instagram client integration extends the framework beyond text-based interactions to include media handling capabilities, showing how the architecture can adapt to different types of content and interaction models. This multi-modal approach provides a foundation for future expansions to additional platforms and interaction types.

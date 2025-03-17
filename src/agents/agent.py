@@ -4,7 +4,7 @@ import dataclasses
 import inspect
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Generic, cast
+from typing import TYPE_CHECKING, Any, Callable, Generic, cast, List, Dict
 
 from . import _utils
 from ._utils import MaybeAwaitable
@@ -157,3 +157,12 @@ class Agent(Generic[TContext]):
             logger.error(f"Instructions must be a string or a function, got {self.instructions}")
 
         return None
+
+# Added by Grant
+@dataclass
+class AgentMemory:
+    """Maintains the agent's memory between interactions"""
+    conversation_history: List[Dict[str, Any]] = field(default_factory=list)
+    user_info: Dict[str, Any] = field(default_factory=dict)
+    last_topics: List[str] = field(default_factory=list)
+    client: str = "generic"  # Track which client the conversation is from

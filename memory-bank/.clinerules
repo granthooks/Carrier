@@ -88,6 +88,15 @@ The Python implementation leans heavily on async/await:
 6. Return responses to Discord channel
 7. Maintain context with AgentMemory
 
+### Instagram Integration Implementation
+1. Set up Instagram client using Instagram Graph API (InstagramAgentClient class)
+2. Implement FTP file upload functionality for media files
+3. Create Instagram media container creation and publishing workflow
+4. Implement status checking and publishing limit management
+5. Add error handling and reconnection logic
+6. Integrate with Agent/Runner for logging and context
+7. Maintain context with AgentMemory
+
 ### Tool Integration Implementation
 1. Define abstract Tool interface
 2. Implement tool registration system
@@ -100,6 +109,8 @@ The Python implementation leans heavily on async/await:
 2. Implement WebSocket support
 3. Add webhook capabilities
 4. Set up authentication
+5. Implement multi-client support in run_agent.py
+6. Create client-specific hooks for each client type
 
 ## Known Challenges
 
@@ -110,6 +121,7 @@ The memory retrieval system for context-aware responses needs careful design:
 - Caching strategies for frequent queries
 - Handling of long-term vs. short-term memory
 - Current implementation stores full conversation history in memory
+- Tracking client source in memory objects for multi-client support
 
 ### Discord Client Challenges
 - Handling Discord API rate limits
@@ -118,12 +130,30 @@ The memory retrieval system for context-aware responses needs careful design:
 - Managing multiple agents in shared channels
 - Processing mentions correctly in various message formats
 
+### Instagram Client Challenges
+- Managing Instagram Graph API publishing limits (25 posts per day)
+- Handling the two-step posting process (create container, then publish)
+- Optimizing FTP file uploads for media files
+- Implementing proper error handling for failed uploads
+- Managing container status checking and timeout handling
+- Securing API credentials and FTP credentials
+- Handling media file size and format restrictions
+
+### Multi-Client Architecture Challenges
+- Coordinating concurrent client operations
+- Managing client-specific context and state
+- Handling different types of content (text, media)
+- Implementing client-specific error handling
+- Balancing resource usage across clients
+- Maintaining consistent agent behavior across clients
+
 ### Tool Security Constraints
 Tools executed by agents need security boundaries:
 - Input validation for tool parameters
 - Resource limitations for tool execution
 - Permissions model for tool access
 - Auditing of tool usage
+- Client-specific tool access controls
 
 ### Testing LLM-Based Systems
 Testing deterministically with non-deterministic LLMs:
@@ -151,7 +181,8 @@ Managing async database operations efficiently:
 - Character definitions stored in JSON format in characters/
 - Contains system prompt, bio, lore, communication style
 - Used to generate comprehensive agent instructions
-- Example: assistantbot.json for Discord assistant agent
+- Example: assistantbot.json for Discord and Instagram agent
+- Client-specific context added to system prompt during initialization
 
 ### Python Development Tools
 - Anaconda environment named "carrier" with Python 3.9
@@ -160,6 +191,13 @@ Managing async database operations efficiently:
 - mypy for type checking
 - flake8 for linting
 - pre-commit hooks for automated checks
+- python-dotenv for environment variable management
+
+### API Tools
+- Discord.py for Discord API integration
+- Requests for Instagram Graph API calls
+- FTPlib for FTP file uploads
+- Aiohttp for asynchronous HTTP requests
 
 ### Database Tools
 - PostgreSQL with vector extensions for semantic search
@@ -175,14 +213,19 @@ Managing async database operations efficiently:
 - SQLAlchemy ORM for database interactions
 - asyncio for async processing
 - Context managers for resource handling
+- Multi-client architecture for platform flexibility
 
 ### Implementation Decisions
 - Use of dataclasses for memory representation (AgentMemory)
 - Command-pattern approach for agent hooks
 - Discord.py's commands.Bot for Discord integration
+- Instagram Graph API for Instagram integration
+- FTP for media file uploads before Instagram posting
 - Separation of character data from agent logic
 - Runtime hooks to implement the processing pipeline stages
 - Agent/Runner pattern for message processing
+- Client-specific hooks for each client type
+- Concurrent client operation in run_agent.py
 
 ### Database Decisions
 - PostgreSQL with vector extension chosen over specialized vector databases
@@ -192,6 +235,8 @@ Managing async database operations efficiently:
 ## Notes
 The Carrier project takes strong inspiration from ElizaOS but adapts its patterns to leverage Python's strengths. The core runtime loop remains the same conceptually, but the implementation details differ to align with Python's ecosystem and paradigms.
 
-The current implementation demonstrates the 7-step runtime loop with hooks for each stage, using the Agent class for basic agent representation and the Runner for processing. The Discord integration serves as a practical application of the framework, showing how agents can interact in real-time chat environments.
+The current implementation demonstrates the 7-step runtime loop with hooks for each stage, using the Agent class for basic agent representation and the Runner for processing. The Discord and Instagram integrations serve as practical applications of the framework, showing how agents can interact through different channels while maintaining a consistent processing approach.
 
-Future development will focus on enhancing the memory system, improving tool integration, and refining the agent runtime components for more sophisticated processing and response generation.
+The multi-client architecture demonstrates the flexibility of the framework, allowing agents to interact through different channels (Discord for conversational interactions, Instagram for media posting) while sharing the same core processing pipeline. Each client implementation follows the same pattern of hooks and event handling, but with client-specific adaptations for the unique requirements of each platform.
+
+Future development will focus on enhancing the memory system, improving tool integration, refining the agent runtime components for more sophisticated processing and response generation, and expanding the multi-client architecture to support additional platforms and interaction types.

@@ -4,6 +4,7 @@ examples/
 examples-nodejs/
 characters/
 instagram_session.json
+tests/
 
 # macOS Files
 .DS_Store
