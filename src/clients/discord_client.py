@@ -126,7 +126,7 @@ class DiscordAgentClient(commands.Bot):
             "user_id": str(message.author.id),
             "username": message.author.display_name,
             "timestamp": str(message.created_at),
-            "client": "discord"
+            "client": "Discord"
         })
         
         # Create input items from conversation history
@@ -150,11 +150,16 @@ class DiscordAgentClient(commands.Bot):
                 # Get response
                 response = result.final_output
                 
-                # Send response to Discord
-                await message.channel.send(response)
+                # Split response into chunks if necessary
+                max_length = 2000
+                response_chunks = [response[i:i+max_length] for i in range(0, len(response), max_length)]
+                
+                # Send each chunk to Discord
+                for chunk in response_chunks:
+                    await message.channel.send(chunk)
                 
                 # Log the agent's response
-                logger.info(f"[Discord] Agent {agent.name} response: {response}")
+                logger.info(f"[Discord] Agent {agent.name} response: {response}\n")
                 
                 # Update input items for future context
                 return result.to_input_list()

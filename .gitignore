@@ -2,7 +2,6 @@
 .vscode/
 examples/
 examples-nodejs/
-characters/
 instagram_session.json
 tests/
 
