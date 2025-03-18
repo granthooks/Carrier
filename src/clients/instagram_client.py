@@ -60,71 +60,92 @@ class InstagramHooks(RunHooks):
 
 
 class InstagramAgentClient:
-    """Instagram client that manages media posting to Instagram"""
+    """Instagram client that manages a single agent interaction"""
     
-    def __init__(self, agents_mapping: Dict[str, Tuple[Agent, Any]]):
-        """Initialize the Instagram client"""
-        self.agents_mapping = agents_mapping
+    def __init__(self, agent: Agent, memory: Any):
+        """Initialize the Instagram client for a specific agent"""
+        # Store agent and memory directly
+        self.agent = agent
+        self.memory = memory
+        
+        # Instagram API credentials will be passed to run() method
+        self.instagram_credentials = None
+        
+        # FTP credentials for media uploads
+        self.ftp_credentials = None
+        
+        # Client state
         self.is_running = False
-        
-        # Instagram Graph API credentials from .env
-        self.instagram_account_id = os.getenv("INSTAGRAM_ACCOUNT_ID")
-        self.instagram_access_token = os.getenv("INSTAGRAM_ACCESS_TOKEN")
-        self.instagram_graph_url = "https://graph.instagram.com/"
-        
-        # FTP credentials from .env
-        self.ftp_server = os.getenv("FTP_SERVER")
-        self.ftp_username = os.getenv("FTP_USERNAME")
-        self.ftp_password = os.getenv("FTP_PASSWORD")
-        self.http_server = os.getenv("HTTP_SERVER")
-        
-        logger.info("Instagram client initialized")
+        self.post_count = 0
     
-    async def connect(self):
-        """Connect to Instagram API - simplified since we're using Graph API directly"""
-        logger.info("Instagram client connecting...")
+    async def run(self, instagram_token: str = None):
+        """Run the Instagram client with the provided token"""
         try:
-            # Validate that we have the required credentials
-            if not self.instagram_account_id or not self.instagram_access_token:
-                logger.error("Instagram Graph API credentials not found in environment variables")
-                return False
+            # Set up Instagram API credentials
+            self.instagram_credentials = self._setup_credentials(instagram_token)
             
-            # Quick validation of access token by checking publishing limit
-            result = await self.get_publishing_limit()
-            if not result or 'error' in result:
-                logger.error(f"Failed to validate Instagram access token: {result}")
-                return False
-                
+            # Set up FTP credentials (for media uploads)
+            username = self.agent.name.lower().replace(" ", "_")
+            self.ftp_credentials = {
+                "host": os.getenv(f"{username}.FTP_HOST"),
+                "user": os.getenv(f"{username}.FTP_USER"),
+                "password": os.getenv(f"{username}.FTP_PASSWORD"),
+                "directory": os.getenv(f"{username}.FTP_DIRECTORY", "/media")
+            }
+            
+            # Run the client
             self.is_running = True
-            logger.info("Instagram client connected successfully")
-            return True
+            logger.info(f"Instagram client for {self.agent.name} started")
+            
+            # Main loop for Instagram operations
+            while self.is_running:
+                # Check for scheduled posts, mentions, or DMs
+                # Process with self.agent directly (no lookup needed)
+                await self._check_instagram_activities()
+                
+                # Respect API rate limits
+                await asyncio.sleep(60)  # Sleep to avoid hitting rate limits
+                
         except Exception as e:
-            logger.error(f"Error connecting to Instagram: {e}")
-            return False
+            logger.error(f"Instagram client error for {self.agent.name}: {e}")
+            self.is_running = False
     
-    async def disconnect(self):
-        """Disconnect from Instagram API - simplified since we're not maintaining a session"""
-        logger.info("Instagram client disconnecting...")
-        self.is_running = False
-        logger.info("Instagram client disconnected")
+    def _setup_credentials(self, instagram_token: str):
+        """Set up Instagram API credentials"""
+        # Implementation of _setup_credentials method
+        # This method should return the necessary credentials for the Instagram API
+        # based on the provided token.
+        # For example, it could return a tuple (account_id, access_token)
+        # or a dictionary with the necessary keys.
+        # This is a placeholder and should be implemented according to your specific requirements.
+        return instagram_token
+    
+    async def _check_instagram_activities(self):
+        """Check for scheduled posts, mentions, or DMs"""
+        # Implementation of _check_instagram_activities method
+        # This method should implement the logic to check for scheduled posts, mentions, or DMs
+        # and process them accordingly.
+        # For example, it could use the self.agent to process the activities.
+        # This is a placeholder and should be implemented according to your specific requirements.
+        pass
     
     async def upload_file_to_ftp(self, file_path):
         """Upload a file to FTP server and return the URL"""
         logger.info(f"Uploading file to FTP server: {file_path}")
         
         # Check if FTP credentials are set
-        if not self.ftp_server or not self.ftp_username or not self.ftp_password:
+        if not self.ftp_credentials:
             logger.error("FTP credentials not found in environment variables")
             return False
             
         try:
             # Connect to the FTP server
-            ftp = FTP(self.ftp_server)
-            ftp.login(user=self.ftp_username, passwd=self.ftp_password)
+            ftp = FTP(self.ftp_credentials["host"])
+            ftp.login(user=self.ftp_credentials["user"], passwd=self.ftp_credentials["password"])
             
             # Upload to this directory
-            remote_dir = '/domains/agntc.io/public_html/media'
-            logger.info(f"Uploading file to {self.ftp_server}{remote_dir}")
+            remote_dir = self.ftp_credentials["directory"]
+            logger.info(f"Uploading file to {self.ftp_credentials['host']}{remote_dir}")
             ftp.cwd(remote_dir)
             
             # Open the file in binary mode and upload it
@@ -136,7 +157,7 @@ class InstagramAgentClient:
             
             # Return the URL of the uploaded file
             file_name = os.path.basename(file_path)
-            file_url = f'https://{self.http_server}/media/{file_name}'
+            file_url = f'https://{self.ftp_credentials["host"]}/media/{file_name}'
             logger.info(f"File uploaded successfully. URL: {file_url}")
             return file_url
         except Exception as e:
@@ -153,9 +174,9 @@ class InstagramAgentClient:
         """Post media (image or video) to Instagram"""
         logger.info(f"Posting media to Instagram: {file_url}")
         try:
-            url = f"{self.instagram_graph_url}{self.instagram_account_id}/media"
+            url = f"{self.instagram_credentials[0]}/media"
             param = {
-                'access_token': self.instagram_access_token,
+                'access_token': self.instagram_credentials[1],
                 'caption': caption
             }
             
@@ -182,9 +203,9 @@ class InstagramAgentClient:
         """Post a reel to Instagram"""
         logger.info(f"Posting reel to Instagram: {video_url}")
         try:
-            url = f"{self.instagram_graph_url}{self.instagram_account_id}/media"
+            url = f"{self.instagram_credentials[0]}/media"
             param = {
-                'access_token': self.instagram_access_token,
+                'access_token': self.instagram_credentials[1],
                 'video_url': video_url,
                 'media_type': media_type,
                 'thumb_offset': '10'  # thumbnail offset in milliseconds
@@ -204,9 +225,9 @@ class InstagramAgentClient:
         """Check the status of an upload"""
         logger.info(f"Checking status of upload: {container_id}")
         try:
-            url = f"{self.instagram_graph_url}{container_id}"
+            url = f"{self.instagram_credentials[0]}/{container_id}"
             param = {
-                'access_token': self.instagram_access_token,
+                'access_token': self.instagram_credentials[1],
                 'fields': 'status_code, status'
             }
             
@@ -224,9 +245,9 @@ class InstagramAgentClient:
         """Publish a container once it's ready"""
         logger.info(f"Publishing container: {container_id}")
         try:
-            url = f"{self.instagram_graph_url}{self.instagram_account_id}/media_publish"
+            url = f"{self.instagram_credentials[0]}/media_publish"
             param = {
-                'access_token': self.instagram_access_token,
+                'access_token': self.instagram_credentials[1],
                 'creation_id': container_id
             }
             
@@ -290,9 +311,9 @@ class InstagramAgentClient:
         """Get the publishing limit status"""
         logger.info("Getting publishing limit...")
         try:
-            url = f"{self.instagram_graph_url}v22.0/{self.instagram_account_id}/content_publishing_limit"
+            url = f"{self.instagram_credentials[0]}/v22.0/{self.instagram_credentials[0]}/content_publishing_limit"
             param = {
-                'access_token': self.instagram_access_token
+                'access_token': self.instagram_credentials[1]
             }
             
             # Make the API request
@@ -307,23 +328,11 @@ class InstagramAgentClient:
             logger.error(f"Error getting publishing limit: {e}")
             return None
     
-    async def run(self):
-        """Run the Instagram client"""
-        if not await self.connect():
-            logger.error("Failed to connect to Instagram. Client will not run.")
-            return
-        
-        logger.info("Instagram client started. Ready to post media.")
-        
-        # Keep the client running
-        while self.is_running:
-            try:
-                # Check publishing limit occasionally
-                await self.get_publishing_limit()
-                logger.info("Instagram client is active")
-                await asyncio.sleep(3600)  # Sleep for an hour
-            except Exception as e:
-                logger.error(f"Error in Instagram client run loop: {e}")
-                await asyncio.sleep(60)
-        
-        await self.disconnect() 
+    async def _check_instagram_activities(self):
+        """Check for scheduled posts, mentions, or DMs"""
+        # Implementation of _check_instagram_activities method
+        # This method should implement the logic to check for scheduled posts, mentions, or DMs
+        # and process them accordingly.
+        # For example, it could use the self.agent to process the activities.
+        # This is a placeholder and should be implemented according to your specific requirements.
+        pass 

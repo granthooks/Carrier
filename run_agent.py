@@ -196,59 +196,66 @@ async def generate_image(description: str) -> Optional[bytes]:
 
 
 async def main():
-    """Main function to run both Discord and Instagram clients"""
+    """Main function to run agent clients based on character configuration"""
     # Load environment variables
     load_dotenv()
     
-    # Initialize agents
-    agents_mapping_discord = {}
-    agents_mapping_instagram = {}
+    # Character files to load
+    character_files = [
+        "characters/assistantbot.json",
+        "characters/plannerbot.json",
+        # Add more character files as needed
+    ]
     
-    # Initialize Assistant Bot agent for Discord and Instagram
-    try:
-        assistantbot_agent_discord, assistantbot_memory_discord = await initialize_agent(
-            character_file, 
-            client="Discord"
-        )
-        agents_mapping_discord[assistantbot_agent_discord.name] = (assistantbot_agent_discord, assistantbot_memory_discord)
-        
-        # Initialize Assistant Bot agent for Instagram
-        assistantbot_agent_instagram, assistantbot_memory_instagram = await initialize_agent(
-            character_file, 
-            client="Instagram"
-        )
-        agents_mapping_instagram[assistantbot_agent_instagram.name] = (assistantbot_agent_instagram, assistantbot_memory_instagram)
-        
-    except Exception as e:
-        logger.error(f"Error initializing agents: {e}")
-        return
+    # Tasks to gather for concurrent execution
+    client_tasks = []
     
-    # Create the clients
-    discord_client = DiscordAgentClient(agents_mapping_discord)
-    instagram_client = InstagramAgentClient(agents_mapping_instagram)
+    # Create and configure clients for each agent
+    for char_file in character_files:
+        try:
+            # Load character data
+            character_data = await load_character_file(char_file)
+            username = character_data.get("username")
+            supported_clients = character_data.get("clients", [])
+            
+            # Initialize the agent
+            agent, memory = await initialize_agent(char_file)
+            
+            # Initialize clients based on character configuration
+            if "Discord" in supported_clients:
+                discord_token = os.getenv(f"{username}_DISCORD_API_TOKEN")
+                if discord_token:
+                    # Create dedicated Discord client for this agent
+                    discord_client = DiscordAgentClient(agent, memory)
+                    client_tasks.append(asyncio.create_task(
+                        discord_client.start(discord_token)
+                    ))
+                else:
+                    logger.error(f"Missing Discord token for {username}")
+            
+            if "Instagram" in supported_clients:
+                instagram_token = os.getenv(f"{username}_INSTAGRAM_ACCESS_TOKEN")
+                if instagram_token:
+                    # Create dedicated Instagram client for this agent
+                    instagram_client = InstagramAgentClient(agent, memory)
+                    client_tasks.append(asyncio.create_task(
+                        instagram_client.run(instagram_token)
+                    ))
+                else:
+                    logger.error(f"Missing Instagram token for {username}")
+                    
+            if "Twitter" in supported_clients:
+                # Similar logic for Twitter client
+                pass
+                
+        except Exception as e:
+            logger.error(f"Error initializing agent from {char_file}: {e}")
     
-    # Create tasks to run both clients concurrently
-    discord_task = asyncio.create_task(discord_client.start(os.getenv("DISCORD_API_TOKEN")))
-    instagram_task = asyncio.create_task(instagram_client.run())
-    
-    # Wait for both tasks to complete (they should run indefinitely unless there's an error)
-    try:
-        logger.info("Starting Discord and Instagram clients...")
-        await asyncio.gather(discord_task, instagram_task)
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt received. Shutting down...")
-    except Exception as e:
-        logger.error(f"Error running clients: {e}")
-    finally:
-        # This will only run if the clients are stopped
-        logger.info("Closing client connections...")
-        
-        # Properly close Discord connection
-        if not discord_client.is_closed():
-            await discord_client.close()
-        
-        # Stop Instagram client
-        instagram_client.is_running = False
+    # Run all clients concurrently
+    if client_tasks:
+        await asyncio.gather(*client_tasks)
+    else:
+        logger.error("No clients were successfully initialized")
 
 
 if __name__ == "__main__":

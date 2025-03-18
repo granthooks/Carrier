@@ -57,21 +57,22 @@ class DiscordHooks(RunHooks):
 
 
 class DiscordAgentClient(commands.Bot):
-    """Discord client that manages agent interactions"""
+    """Discord client that manages a single agent interaction"""
     
-    def __init__(self, agents_mapping: Dict[str, Tuple[Agent, Any]]):
-        """Initialize the Discord client"""
-        # Setup Discord intents (permissions)
+    def __init__(self, agent: Agent, memory: Any):
+        """Initialize the Discord client for a specific agent"""
+        # Setup Discord intents
         intents = discord.Intents.default()
-        intents.message_content = True  # Needed to read message content
+        intents.message_content = True
         
-        # Initialize the bot with a command prefix (for potential commands)
+        # Initialize the bot
         super().__init__(command_prefix='!', intents=intents)
         
-        # Store agent mapping
-        self.agents_mapping = agents_mapping
+        # Store agent and memory directly
+        self.agent = agent
+        self.memory = memory
         
-        # Set up our event handlers
+        # Setup event handlers
         self.setup_event_handlers()
     
     def setup_event_handlers(self):
@@ -83,7 +84,6 @@ class DiscordAgentClient(commands.Bot):
     async def on_ready(self):
         """Called when the bot has connected to Discord"""
         logger.info(f"Discord bot connected as {self.user}")
-        logger.info(f"Available agents on Discord: {', '.join(self.agents_mapping.keys())}")
     
     async def on_message(self, message: discord.Message):
         """Called when a message is received"""
@@ -93,12 +93,14 @@ class DiscordAgentClient(commands.Bot):
         
         # Check if the bot is mentioned
         if self.user.mentioned_in(message):
-            await self.process_mention(message)
+            # Process directly with this client's agent
+            # No need for agent lookup since there's only one
+            await self.process_message(message)
         
-        # Process commands (if we add any)
+        # Process commands
         await self.process_commands(message)
     
-    async def process_mention(self, message: discord.Message):
+    async def process_message(self, message: discord.Message):
         """Process a message that mentions the bot"""
         # Extract the message content without the mention
         content = message.clean_content
@@ -110,31 +112,10 @@ class DiscordAgentClient(commands.Bot):
         
         content = content.strip()
         
-        # Determine which agent to use (default to the first one for now)
-        agent_name = self.determine_addressed_agent(message.content)
-        
-        if agent_name in self.agents_mapping:
-            agent, memory = self.agents_mapping[agent_name]
-        else:
-            # Default to the first agent if no match
-            agent_name = list(self.agents_mapping.keys())[0]
-            agent, memory = self.agents_mapping[agent_name]
-        
-        logger.info(f"[Discord] Processing mention for {agent_name}: {content}")
+        logger.info(f"[Discord] Processing mention for {self.agent.name}: {content}")
         
         # Process with the agent
-        await self.process_with_agent(message, content, agent, memory)
-    
-    def determine_addressed_agent(self, content: str) -> str:
-        """Determine which agent is being addressed in the message"""
-        # Simple implementation: check if agent name appears in the message
-        # In a more advanced implementation, could use NLP to determine the addressed agent
-        for agent_name in self.agents_mapping.keys():
-            if agent_name.lower() in content.lower():
-                return agent_name
-        
-        # Default to the first agent
-        return list(self.agents_mapping.keys())[0]
+        await self.process_with_agent(message, content, self.agent, self.memory)
     
     async def process_with_agent(self, message: discord.Message, content: str, agent: Agent, memory: Any):
         """Process a message with the specified agent"""
