@@ -2,7 +2,6 @@
     "name": "Planner Bot",
     "username": "PLANNER_BOT",
     "clients": ["Discord"],
-    "plugins": [],
     "tools": [],
     "modelProvider": "openai",
     "temperature": 0.9,

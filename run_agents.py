@@ -136,19 +136,44 @@ async def initialize_agent(character_file: str, client: str = "generic") -> Tupl
     # Build the system prompt from character data
     system_prompt = build_system_prompt(character_data, client)
     
-    # Initialize the agent
+    # Get tools configuration from character data
+    configured_tools = []
+    tool_config = character_data.get("tools", [])
+    
+    # Map tool names to actual tool functions
+    tool_mapping = {
+        "GET_WEATHER": GET_WEATHER,
+        # Add other tools here as they are implemented
+    }
+    
+    # Add only the tools specified in the character file
+    for tool_name in tool_config:
+        if tool_name in tool_mapping:
+            configured_tools.append(tool_mapping[tool_name])
+        else:
+            logger.warning(f"Tool '{tool_name}' specified in character file but not implemented")
+    
+    # Initialize the agent with configured tools
     agent = Agent(
         name=character_data.get("name", "Agent"),
         instructions=system_prompt,
         model=character_data.get("model", "gpt-4o-mini"),
-        tools=[GET_WEATHER]  # Use the decorated function directly
+        tools=configured_tools 
     )
     
-    # Initialize memory
-    memory = AgentMemory(client=client)
+    # Initialize memory - allow this to raise exceptions to fail the agent initialization
+    try:
+        memory = AgentMemory(client=client)
+        # Test memory functionality (optional but recommended)
+        # You could add a test here to verify memory is working properly
+        # For example: await memory.test_connection()
+    except Exception as e:
+        logger.error(f"CRITICAL ERROR: Failed to initialize memory for {agent.name}: {e}")
+        logger.error("Agent cannot function without memory. Initialization aborted.")
+        raise RuntimeError(f"Failed to initialize agent memory: {e}") from e
     
-    #  list tools in uppercase with brackets between each tool
-    tools_list = ", ".join([tool.name.upper() for tool in agent.tools])
+    # List tools in uppercase with brackets between each tool
+    tools_list = ", ".join([tool.name.upper() for tool in agent.tools]) if agent.tools else "NO TOOLS"
     logger.info(f"{agent.name} initialized with {tools_list} for {client}")
     return agent, memory
 
@@ -203,7 +228,7 @@ async def main():
     # Character files to load
     character_files = [
         "characters/assistantbot.json",
-        "characters/plannerbot.json",
+        # "characters/plannerbot.json",
         # Add more character files as needed
     ]
     

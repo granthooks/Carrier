@@ -2,12 +2,11 @@
     "name": "Assistant Bot",
     "username": "ASSISTANT_BOT",
     "clients":["Discord", "Instagram", "Telegram"],
-    "plugins": [
-        "plugin-web-search",
-        "plugin-nocodb"
+    "tools": [
+        "GET_WEATHER"
     ],
-    "tools":[],
     "modelProvider": "anthropic",
+    "temperature": 0.7,
     "settings": {
         "secrets": {},
         "voice": {

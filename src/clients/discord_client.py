@@ -11,6 +11,7 @@ import logging
 from typing import Dict, Tuple, List, Any
 import discord
 from discord.ext import commands
+from datetime import datetime
 
 from agents import Agent, Runner, RunContextWrapper, RunHooks
 from ..utils.logging import configure_logging
@@ -39,21 +40,64 @@ class DiscordHooks(RunHooks):
     
     async def on_agent_end(self, context: RunContextWrapper, agent: Agent, output: Any) -> None:
         """Called when agent processing completes"""
-        from ..agents.agent import AgentMemory  # Import here to avoid circular imports
+        # Debug the output structure to understand what we're getting
+        logger.debug(f"[{self.client}] Output type: {type(output)}")
+        logger.debug(f"[{self.client}] Output attrs: {dir(output)}")
         
-        memory: AgentMemory = context.context
+        # Extract the content, considering different possible structures
+        response_content = None
         
-        # Store conversation in memory for future context
+        # Try different ways to access the content
         if hasattr(output, 'content') and output.content:
-            memory.conversation_history.append({
-                "role": "assistant",
-                "content": output.content,
-                "timestamp": "now",  # In a real implementation, use actual timestamp
-                "client": self.client
-            })
-            logger.info(f"[{self.client}] Memory contains {len(memory.conversation_history)} messages")
-        
-        logger.info(f"[{self.client}] Response generated and stored in memory")
+            response_content = output.content
+        elif hasattr(output, 'text') and output.text:
+            response_content = output.text
+        elif hasattr(output, 'message') and hasattr(output.message, 'content') and output.message.content:
+            response_content = output.message.content
+        elif isinstance(output, dict) and 'content' in output:
+            response_content = output['content']
+        elif isinstance(output, str):
+            response_content = output
+            
+        # If we have response content, store it
+        if response_content:
+            # Use the agent's memory system if available
+            if hasattr(agent, 'memory_system') and agent.memory_system and hasattr(agent, 'store_message'):
+                try:
+                    # Create the message data
+                    content = {"text": response_content}
+                    room_id = getattr(context.context, 'room_id', 'default')
+                    
+                    message_data = {
+                        "content": content,
+                        "user_id": agent.name,  # Use agent name for bot responses
+                        "room_id": room_id, 
+                        "agent_id": agent.name,
+                        "metadata": {
+                            "role": "assistant",
+                            "timestamp": datetime.now().isoformat(),
+                            "client": self.client
+                        }
+                    }
+                    
+                    # Store message and capture the result
+                    memory_id = await agent.store_message(message_data)
+                    
+                    # Only log success if we get a valid ID back
+                    if memory_id:
+                        logger.info(f"[{self.client}] Response stored in agent memory system with ID: {memory_id}")
+                    else:
+                        logger.error(f"[{self.client}] Failed to store response in memory system - returned None")
+                except Exception as e:
+                    logger.error(f"[{self.client}] Error storing response in memory system: {e}")
+                    import traceback
+                    logger.error(f"[{self.client}] Traceback: {traceback.format_exc()}")
+            else:
+                logger.warning(f"[{self.client}] Agent doesn't have memory system or store_message method")
+        else:
+            # Log that we couldn't extract content
+            logger.warning(f"[{self.client}] Could not extract content from output to store")
+            logger.debug(f"[{self.client}] Output representation: {repr(output)}")
 
 
 class DiscordAgentClient(commands.Bot):
@@ -119,15 +163,64 @@ class DiscordAgentClient(commands.Bot):
     
     async def process_with_agent(self, message: discord.Message, content: str, agent: Agent, memory: Any):
         """Process a message with the specified agent"""
-        # Add message to memory
-        memory.conversation_history.append({
-            "role": "user",
-            "content": content,
-            "user_id": str(message.author.id),
-            "username": message.author.display_name,
-            "timestamp": str(message.created_at),
-            "client": "Discord"
-        })
+        # Set room ID for organizing conversations
+        room_id = str(message.channel.id)
+        
+        # Store user message in memory
+        if hasattr(agent, 'memory_system') and agent.memory_system and hasattr(agent, 'store_message'):
+            try:
+                message_content = {"text": content}
+                message_data = {
+                    "content": message_content,
+                    "user_id": str(message.author.id),
+                    "room_id": room_id,
+                    "agent_id": agent.name,
+                    "metadata": {
+                        "role": "user",
+                        "username": message.author.display_name,
+                        "timestamp": str(message.created_at),
+                        "client": "Discord"
+                    }
+                }
+                memory_id = await agent.store_message(message_data)
+                if memory_id:
+                    logger.info(f"[Discord] Message stored in agent memory system with ID: {memory_id}")
+                else:
+                    logger.warning(f"[Discord] Failed to store message in memory system")
+                    # Fall back to legacy memory
+                    memory.conversation_history.append({
+                        "role": "user",
+                        "content": content,
+                        "user_id": str(message.author.id),
+                        "username": message.author.display_name,
+                        "timestamp": str(message.created_at),
+                        "client": "Discord"
+                    })
+                
+                # If using new memory, store room_id in context for later use
+                if not hasattr(memory, 'room_id'):
+                    memory.room_id = room_id
+            except Exception as e:
+                logger.error(f"[Discord] Error storing message in memory system: {e}")
+                # Fall back to legacy memory
+                memory.conversation_history.append({
+                    "role": "user",
+                    "content": content,
+                    "user_id": str(message.author.id),
+                    "username": message.author.display_name,
+                    "timestamp": str(message.created_at),
+                    "client": "Discord"
+                })
+        else:
+            # Legacy memory system
+            memory.conversation_history.append({
+                "role": "user",
+                "content": content,
+                "user_id": str(message.author.id),
+                "username": message.author.display_name,
+                "timestamp": str(message.created_at),
+                "client": "Discord"
+            })
         
         # Create input items from conversation history
         # For simplicity, we'll just use the current message as input
@@ -166,4 +259,4 @@ class DiscordAgentClient(commands.Bot):
             
             except Exception as e:
                 logger.error(f"[Discord] Error processing message: {e}")
-                await message.channel.send(f"I encountered an error while processing your message. Please try again later.") 
+                await message.channel.send(f"I encountered an error while processing your message. Please try again later.")
