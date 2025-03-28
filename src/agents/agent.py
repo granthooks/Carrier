@@ -239,6 +239,46 @@ class Agent(Generic[TContext]):
         except Exception as e:
             logger.error(f"Failed to store message in memory system: {e}")
             return None
+    
+    async def format_conversation_for_context(
+        self,
+        user_id: str,
+        room_id: str,
+        limit: int = 10
+    ) -> str:
+        """Format conversation history into context for the LLM.
+        
+        Args:
+            user_id: User ID
+            room_id: Room/conversation ID
+            limit: Maximum number of messages to retrieve
+            
+        Returns:
+            Formatted conversation history as string
+        """
+        # Get conversation from memory system
+        conversation = await self.get_conversation(user_id, room_id, limit)
+        
+        if not conversation:
+            return "No previous conversation found."
+            
+        # Format conversation into a readable format for the LLM
+        formatted_lines = []
+        formatted_lines.append("Previous conversation history:")
+        
+        for message in conversation:
+            role = message.get("metadata", {}).get("role", "unknown")
+            username = message.get("metadata", {}).get("username", "Unknown")
+            content_text = message.get("content", {}).get("text", "")
+            
+            if role == "user":
+                formatted_lines.append(f"{username}: {content_text}")
+            elif role == "assistant":
+                formatted_lines.append(f"Assistant: {content_text}")
+            else:
+                formatted_lines.append(f"{role}: {content_text}")
+        
+        return "\n".join(formatted_lines)
         
     async def get_conversation(
         self, 

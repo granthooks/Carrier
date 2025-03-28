@@ -206,7 +206,8 @@ class MemorySystem:
         memory_type: Optional[str] = None,
         user_id: Optional[str] = None,
         room_id: Optional[str] = None,
-        agent_id: Optional[str] = None
+        agent_id: Optional[str] = None,
+        embedding: Optional[List[float]] = None
     ) -> List[Dict[str, Any]]:
         """Retrieve similar memories using vector search.
         
@@ -218,12 +219,13 @@ class MemorySystem:
             user_id: Optional filter by user ID
             room_id: Optional filter by room ID
             agent_id: Optional filter by agent ID
+            embedding: Optional pre-computed embedding vector
             
         Returns:
             List of memory objects with similarity scores
         """
-        # Generate embedding for query
-        query_embedding = await self.embed(query)
+        # Generate embedding for query if not provided
+        query_embedding = embedding if embedding is not None else self.embed(query)
         
         try:
             # Build the query
@@ -279,7 +281,8 @@ class MemorySystem:
             List of memory objects
         """
         try:
-            query = self.supabase.from_("memories").schema(self.schema_name).select("*")
+            # Build the query with filters as parameters
+            query = self.supabase.from_("memories").select("*")
             
             # Add filters
             if memory_type:
@@ -291,8 +294,12 @@ class MemorySystem:
             if agent_id:
                 query = query.eq("agent_id", agent_id)
                 
-            # Add ordering
-            query = query.order(order_by, ascending=ascending)
+            # Add ordering - use the correct syntax for the Supabase client
+            # Instead of using ascending as a parameter, use separate methods
+            if ascending:
+                query = query.order(order_by)  # Ascending order is default
+            else:
+                query = query.order(order_by, desc=True)  # Use desc=True for descending
             
             # Add limit
             query = query.limit(limit)
@@ -302,6 +309,8 @@ class MemorySystem:
             return result.data
         except Exception as e:
             logger.error(f"Error retrieving memories: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
             
     async def delete_memories(

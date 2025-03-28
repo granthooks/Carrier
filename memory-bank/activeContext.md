@@ -1,12 +1,13 @@
 # Active Context: Carrier
 
 ## Current Focus
-* Implementing the runtime loop architecture for autonomous AI Agents
-* Adapting the ElizaOS patterns from Node.js to Python
-* Establishing core architectural components
-* Developing multi-client integrations for autonomous agent interactions
-* Implementing Instagram client integration for media posting capabilities
-* Testing and refining the Discord and Instagram integrations with different character files
+* Implementing a robust memory system for Carrier agents
+* Developing Supabase integration with PostgreSQL and vector extensions for memory storage
+* Creating specialized memory managers for different memory types
+* Integrating memory system with agent runtime through hooks
+* Implementing CLI tools for memory management
+* Testing memory integration with agents
+* Refining the Discord and Instagram integrations with different character files
 
 ## Recent Changes
 * March 13, 2025: Created memory bank directory and initialized core documentation files
@@ -24,20 +25,29 @@
 * March 16, 2025: Added Instagram hooks for agent runtime integration
 * March 17, 2025: Integrated Instagram client with Agent framework for media posting capabilities
 * March 17, 2025: Updated run_agent.py to support concurrent Discord and Instagram client operation
+* March 18, 2025: Implemented core MemorySystem class for Supabase integration
+* March 18, 2025: Created specialized memory managers (MessageManager, DescriptionManager, LoreManager, etc.)
+* March 19, 2025: Implemented memory hooks for integrating conversation history with agent context
+* March 19, 2025: Created memory CLI tool for managing memories
+* March 20, 2025: Implemented integration tests for memory system
+* March 20, 2025: Added vector search capabilities for semantic memory retrieval
+* March 20, 2025: Implemented RAG knowledge manager for retrieval-augmented generation
 
 ## Next Steps
-* Test the Discord and Instagram integrations with the Tifa character and assistantbot
-* Refine the Discord and Instagram clients based on testing feedback
-* Extend Discord integration to support multiple agents and channels
-* Enhance Instagram client with additional media posting capabilities
-* Implement error handling and reconnection logic for Instagram client
-* Optimize FTP file upload process for Instagram media
-* Begin implementation of additional Agent Runtime class features
-* Develop the Message Manager component for more complex processing
-* Create the State Manager for more comprehensive context composition
-* Implement the Action Manager for expanded tool execution
-* Design the Memory System for more sophisticated interaction storage
-* Set up the Provider System for alternative LLM integration options
+* Optimize memory retrieval for better performance with large memory stores
+* Implement caching strategies for frequently accessed memories
+* Add memory persistence across agent restarts
+* Enhance vector search with improved embedding models
+* Implement memory pruning and summarization for long-running conversations
+* Add relationship tracking between users and agents
+* Implement sentiment analysis for relationship quality assessment
+* Create memory visualization tools for debugging and analysis
+* Integrate memory system with Discord and Instagram clients
+* Implement memory-aware response generation for more contextual responses
+* Add memory export/import functionality for backup and migration
+* Develop memory privacy controls and access management
+* Implement memory retention policies and automatic cleanup
+* Create memory analytics for usage patterns and optimization
 
 ## Active Decisions
 * Python will be the primary implementation language
@@ -53,27 +63,39 @@
 * Agents respond when mentioned/tagged in Discord channels
 * Instagram client provides media posting capabilities
 * Discord and Instagram credentials are loaded from the existing .env file
-* Agent memory is maintained using the AgentMemory dataclass
+* Agent memory is maintained using the MemorySystem with Supabase backend
+* Memory retrieval uses vector embeddings for semantic search
+* OpenAI embeddings are used for vector representation of text
+* Memory is organized by type (message, description, lore, document, knowledge)
+* Memory managers provide specialized interfaces for different memory types
+* Memory hooks integrate conversation history with agent context
 * Runtime hooks implement the 7-step process for message handling
 
 ## Current Considerations
-* How to efficiently implement the memory retrieval system for context-aware responses
-* The best approach for implementing tool validation and execution
-* Performance optimization for handling concurrent agent instances
-* Testing strategy for deterministic testing of LLM-based systems
-* Security measures for agent tool usage and data privacy
-* Efficient handling of Discord message events and rate limiting
+* How to efficiently implement memory retrieval for very large memory stores
+* Balancing between memory precision and recall in semantic search
+* Optimizing embedding generation to reduce API costs
+* Implementing effective caching strategies for frequently accessed memories
+* Handling long-term vs. short-term memory differentiation
+* Implementing memory summarization for extended conversations
+* Managing memory privacy and access controls
+* Implementing cross-agent memory sharing where appropriate
+* Optimizing database schema for vector search performance
+* Handling memory migration and versioning
+* Implementing memory backup and recovery procedures
+* Balancing memory retention with storage constraints
+* Implementing memory analytics for optimization
+* Handling Discord message events and rate limiting
 * Multi-agent management for different Discord channels or servers
 * Handling long-running Discord and Instagram connections and reconnection strategies
 * Managing Discord and Instagram API rate limits in high-traffic environments
 * Optimizing media file uploads for Instagram posting
 * Handling Instagram API publishing limits and quotas
 * Implementing robust error handling for Instagram media posting
-* Optimizing memory storage for efficient context retrieval
 
 ## Notes
-The project has moved from planning to implementation, with the core Discord and Instagram client integrations now in place. The discord_agent.py script implements the connection to Discord using discord.py, while the instagram_client.py script implements the connection to Instagram using the Instagram Graph API. The Agent class from the Carrier framework handles message processing and response generation for both clients.
+The project has moved from client integration to memory system implementation, with the core memory components now in place. The MemorySystem class provides the foundation for memory storage and retrieval, while specialized memory managers offer tailored interfaces for different memory types. The memory hooks integrate conversation history with agent context, enabling more contextual responses.
 
-The implementation follows the 7-step runtime loop outlined in the project brief, with each step mapped to specific components in the Python codebase. Runtime hooks are used to implement the various stages of message processing, action execution, evaluation, and memory storage.
+The implementation follows the 7-step runtime loop outlined in the project brief, with memory storage and retrieval integrated at appropriate points in the processing pipeline. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.
 
-The current implementation of Discord and Instagram integrations provides a strong foundation for further development of the Carrier framework, with the core agent runtime pattern now demonstrated in practical applications. The Discord client enables conversational interactions in chat channels, while the Instagram client provides media posting capabilities. The next steps will focus on refining these implementations and extending them to support more complex features like multi-agent management, advanced tool usage, and enhanced media handling.
+The current implementation provides a strong foundation for further development of the memory system, with the core components now demonstrated in practical applications. The next steps will focus on optimizing memory retrieval, implementing more sophisticated memory management strategies, and integrating the memory system more deeply with the Discord and Instagram clients.

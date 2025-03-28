@@ -21,6 +21,13 @@ graph TD
     H2[Instagram Client] --> A
     H3[Other Clients] -.-> A
     A --> I[External Tools]
+    
+    F --> F1[Message Manager]
+    F --> F2[Description Manager]
+    F --> F3[Lore Manager]
+    F --> F4[Documents Manager]
+    F --> F5[Knowledge Manager]
+    F --> F6[RAG Knowledge Manager]
 ```
 
 The architecture implements a processing pipeline that takes user inputs from various clients, processes them through a series of steps, and produces agent responses with potential actions. The multi-client design allows agents to interact through different channels while maintaining a consistent processing approach.
@@ -46,6 +53,11 @@ The architecture implements a processing pipeline that takes user inputs from va
 5. **Pluggable Architecture**
    - Support for dynamic loading of plugins, tools, and providers
    - Extension points for customization without core code changes
+
+6. **Vector-Based Memory System**
+   - Supabase with PostgreSQL and vector extensions for memory storage
+   - OpenAI embeddings for semantic representation of text
+   - Vector similarity search for retrieving relevant memories
 
 ## Design Patterns
 
@@ -135,6 +147,51 @@ class AgentRuntime:
         self.llm_provider = llm_provider
 ```
 
+### 6. Repository Pattern
+Used in the memory system for data access abstraction:
+
+```python
+class MemorySystem:
+    def __init__(self, supabase_url: str, supabase_key: str):
+        self.supabase = create_client(supabase_url, supabase_key)
+        
+    async def store_memory(self, content, memory_type, user_id, room_id, agent_id, metadata=None):
+        # Store memory in the database
+        
+    async def retrieve_similar(self, query, threshold=0.7, limit=10, memory_type=None):
+        # Retrieve similar memories using vector search
+```
+
+### 7. Manager Pattern
+Used for specialized memory managers:
+
+```python
+class BaseMemoryManager:
+    def __init__(self, memory_system: MemorySystem):
+        self.memory_system = memory_system
+
+class MessageManager(BaseMemoryManager):
+    async def create_memory(self, message: Dict[str, Any]) -> str:
+        # Create a new message memory
+        
+    async def get_conversation(self, user_id: str, room_id: str, agent_id: str, limit: int = 20):
+        # Get recent conversation messages
+```
+
+### 8. Hook Pattern
+Used for integrating memory with agent runtime:
+
+```python
+class MemoryContextHooks(RunHooks):
+    def __init__(self, user_id: str, room_id: str, conversation_limit: int = 10):
+        self.user_id = user_id
+        self.room_id = room_id
+        self.conversation_limit = conversation_limit
+        
+    async def on_agent_start(self, context: RunContextWrapper, agent: Agent) -> None:
+        # Add conversation history to system prompt
+```
+
 ## Component Relationships
 
 ### Agent Runtime
@@ -180,6 +237,18 @@ Manages persistent storage of interactions:
 - Retrieves relevant memories
 - Provides context for state composition
 - Tracks client source in memory objects
+- Generates embeddings for semantic search
+- Performs vector similarity search
+- Manages different types of memories through specialized managers
+
+#### Memory Managers
+Specialized interfaces for different memory types:
+- **MessageManager**: Handles conversation messages
+- **DescriptionManager**: Manages user descriptions
+- **LoreManager**: Stores agent background information
+- **DocumentsManager**: Handles large documents
+- **KnowledgeManager**: Manages searchable knowledge fragments
+- **RAGKnowledgeManager**: Implements retrieval-augmented generation
 
 ### Provider System
 Integrates with external LLM services:
@@ -266,7 +335,41 @@ sequenceDiagram
     InstagramClient->>User: Return Result
 ```
 
-The flow begins with a message or action request received from a client interface. This input is processed through the pipeline, with each component performing its specific role based on the client type. For Discord, this involves conversational interactions, while Instagram focuses on media posting capabilities. The final response or action result is then sent back to the appropriate client, with the entire interaction stored in memory.
+### Memory System Flow
+
+```mermaid
+sequenceDiagram
+    participant Agent
+    participant MemoryHooks
+    participant MemorySystem
+    participant MessageManager
+    participant Supabase
+    participant OpenAI
+    
+    Agent->>MemoryHooks: on_agent_start
+    MemoryHooks->>Agent: format_conversation_for_context
+    Agent->>MessageManager: get_conversation
+    MessageManager->>MemorySystem: get_memories
+    MemorySystem->>Supabase: Query memories
+    Supabase->>MemorySystem: Return memories
+    MemorySystem->>MessageManager: Return memories
+    MessageManager->>Agent: Return conversation
+    Agent->>MemoryHooks: Return formatted conversation
+    MemoryHooks->>Agent: Enhance system prompt
+    
+    Agent->>MemorySystem: store_memory
+    MemorySystem->>OpenAI: Generate embedding
+    OpenAI->>MemorySystem: Return embedding
+    MemorySystem->>Supabase: Store memory with embedding
+    Supabase->>MemorySystem: Confirm storage
+    
+    Agent->>MemorySystem: retrieve_similar
+    MemorySystem->>OpenAI: Generate query embedding
+    OpenAI->>MemorySystem: Return embedding
+    MemorySystem->>Supabase: Vector similarity search
+    Supabase->>MemorySystem: Return similar memories
+    MemorySystem->>Agent: Return similar memories
+```
 
 ## API Design
 
@@ -327,6 +430,33 @@ async def configure_client(client_id: str, config: ClientConfig):
     # Configure a specific client interface
 ```
 
+### Memory API
+Provides endpoints for memory management:
+
+```python
+@app.post("/memories")
+async def create_memory(memory: MemoryCreate):
+    # Create a new memory
+    
+@app.get("/memories")
+async def get_memories(
+    memory_type: Optional[str] = None,
+    user_id: Optional[str] = None,
+    room_id: Optional[str] = None,
+    agent_id: Optional[str] = None,
+    limit: int = 20
+):
+    # Get memories based on filters
+    
+@app.post("/memories/similar")
+async def find_similar_memories(query: SimilarityQuery):
+    # Find memories similar to the query
+    
+@app.delete("/memories")
+async def delete_memories(filters: MemoryDeleteFilters):
+    # Delete memories based on filters
+```
+
 ## Security Considerations
 
 1. **Authentication and Authorization**
@@ -354,6 +484,12 @@ async def configure_client(client_id: str, config: ClientConfig):
    - Rate limiting for API calls to external services
    - Publishing limits for Instagram posts
 
+5. **Memory Privacy**
+   - Access controls for memory retrieval
+   - User-specific memory isolation
+   - Configurable memory retention policies
+   - Consent management for memory storage
+
 ## Scalability Approach
 
 1. **Horizontal Scaling**
@@ -365,20 +501,61 @@ async def configure_client(client_id: str, config: ClientConfig):
    - Partitioning of memory storage by agent and time
    - Read replicas for memory retrieval
    - Caching of frequently accessed memories
+   - Vector index optimization for similarity search
 
 3. **Processing Optimization**
    - Batched embedding generation
    - Parallel processing of independent operations
    - Efficient vector search for memory retrieval
+   - Caching of embeddings for frequently accessed content
 
 4. **Resource Management**
    - Configurable limits on conversation length
    - Automatic cleanup of old conversations
    - Rate limiting for external API calls
+   - Memory pruning and summarization for long-running conversations
+
+## Memory System Architecture
+
+```mermaid
+graph TD
+    A[MemorySystem] --> B[Supabase Client]
+    A --> C[Embedding Generation]
+    
+    A --> D[MessageManager]
+    A --> E[DescriptionManager]
+    A --> F[LoreManager]
+    A --> G[DocumentsManager]
+    A --> H[KnowledgeManager]
+    A --> I[RAGKnowledgeManager]
+    
+    J[MemoryContextHooks] --> A
+    K[Agent] --> A
+    
+    B --> L[PostgreSQL with Vector Extension]
+    C --> M[OpenAI Embeddings API]
+    
+    D --> N[Conversation History]
+    E --> O[User Descriptions]
+    F --> P[Agent Background]
+    G --> Q[Document Storage]
+    H --> R[Knowledge Fragments]
+    I --> S[RAG Knowledge Base]
+    
+    T[MemoryCache] --> A
+```
+
+The memory system architecture is built around the central MemorySystem class, which provides the core functionality for storing and retrieving memories. It uses Supabase as the database backend, with PostgreSQL and vector extensions for efficient semantic search. The system generates embeddings using OpenAI's embedding API, which are then used for vector similarity search.
+
+Specialized memory managers provide tailored interfaces for different types of memories, making it easier to work with specific kinds of data. The MemoryContextHooks integrate the memory system with the agent runtime, adding conversation history to the agent context for more contextual responses.
+
+The memory system also includes a caching layer for frequently accessed embeddings, reducing the need for repeated API calls and improving performance. The database schema includes tables for memories and relationships, with vector embeddings for semantic search.
 
 ## Notes
 The Carrier system architecture adapts the core concepts from ElizaOS while leveraging Python's ecosystem. The focus is on creating a modular, extensible framework that can support a wide range of agent types and use cases while maintaining a consistent approach to message processing, state management, and tool usage.
 
 The multi-client architecture demonstrates the flexibility of the framework, allowing agents to interact through different channels (Discord for conversational interactions, Instagram for media posting) while sharing the same core processing pipeline. Each client implementation follows the same pattern of hooks and event handling, but with client-specific adaptations for the unique requirements of each platform.
+
+The memory system extends the framework's capabilities by providing persistent storage and retrieval of interactions, enabling context-aware responses across multiple conversations and platforms. The vector-based approach allows for semantic search, retrieving memories based on content similarity rather than just exact matches or timestamps.
 
 The Instagram client integration extends the framework beyond text-based interactions to include media handling capabilities, showing how the architecture can adapt to different types of content and interaction models. This multi-modal approach provides a foundation for future expansions to additional platforms and interaction types.

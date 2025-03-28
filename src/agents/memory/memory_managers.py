@@ -92,24 +92,22 @@ class MessageManager(BaseMemoryManager):
         room_id = params.get("room_id")
         agent_id = params.get("agent_id")
         
-        # Use direct SQL query instead of RPC
         try:
-            # Build a basic filter query
-            query = self.memory_system.supabase.table("memories").eq('type', 'message')
-            
-            if user_id:
-                query = query.eq('user_id', user_id)
-            if room_id:
-                query = query.eq('room_id', room_id)
-            if agent_id:
-                query = query.eq('agent_id', agent_id)
-            
-            # Execute with limit
-            query = query.limit(count)
-            result = query.execute()
-            return result.data
+            # Use the retrieve_similar method from MemorySystem
+            return await self.memory_system.retrieve_similar(
+                query="",  # Empty query since we're providing embedding directly
+                threshold=threshold,
+                limit=count,
+                memory_type="message",
+                user_id=user_id,
+                room_id=room_id,
+                agent_id=agent_id,
+                embedding=embedding  # Pass the embedding directly
+            )
         except Exception as e:
-            logger.error(f"Error searching memories: {e}")
+            logger.error(f"Error searching memories by embedding: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return []
 
 

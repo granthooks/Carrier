@@ -8,6 +8,12 @@ View Agent convesation logs [**here**](https://platform.openai.com/logs)
 Configuration for Discord bots [**here**](https://discord.com/developers/applications)
 
 
+## How to Update the SDK in the Future
+To update the OpenAI SDK:
+* Clone the latest SDK into carrier-updated/
+* Copy the updated files to src/agents/
+* Run the app using the new run_agents_new.py script
+
 ---
 # From OpenAI README:
 

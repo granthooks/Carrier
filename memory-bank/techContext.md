@@ -19,14 +19,17 @@
 - **numpy/scipy**: For vector operations (embeddings)
 - **pytest**: Testing framework
 - **python-dotenv**: Environment variable management
+- **supabase-py**: Python client for Supabase
+- **pgvector**: PostgreSQL extension for vector operations
 
 ### External Services
-- **OpenAI API**: Primary LLM provider
+- **OpenAI API**: Primary LLM provider and embeddings provider
 - **Anthropic API**: Alternative LLM provider
 - **Discord API**: For Discord bot integration
 - **Instagram Graph API**: For Instagram media posting
 - **FTP Server**: For media file uploads before Instagram posting
 - **PostgreSQL**: Primary database with vector extension
+- **Supabase**: Backend-as-a-Service with PostgreSQL and vector support
 - **Redis**: For caching and pub/sub functionality
 
 ## Development Setup
@@ -71,6 +74,16 @@
    # Add HTTP_SERVER to .env for the public URL of the FTP server
    ```
 
+5. **Memory System Setup**:
+   ```bash
+   # Supabase setup
+   # Create a Supabase project at https://supabase.com/
+   # Add credentials to .env as SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+   
+   # Initialize memory tables
+   python -m src.tools.memory_cli init
+   ```
+
 ### Development Tools
 - **VSCode** with Python extensions
 - **Black** for code formatting
@@ -101,6 +114,7 @@ black src/ tests/
    - Rate limits on LLM API calls
    - Token limits for context windows
    - Latency variability from third-party services
+   - Cost considerations for embedding generation
 
 3. **Discord API Constraints**
    - Rate limits on message sending
@@ -121,12 +135,21 @@ black src/ tests/
 6. **Database Performance**
    - Vector search performance for large memory stores
    - Connection handling for async database operations
+   - Scaling considerations for vector operations
+   - Index optimization for similarity search
 
 7. **Deployment Considerations**
    - Environment variables for sensitive configurations
    - Docker container memory limitations
    - Async worker processes management
    - Long-running client connections
+
+8. **Memory System Constraints**
+   - OpenAI embedding API rate limits and costs
+   - Vector search performance with large datasets
+   - Memory storage growth over time
+   - Balancing between memory precision and recall
+   - Embedding dimension limitations (1536 for OpenAI embeddings)
 
 ## Dependencies
 
@@ -144,6 +167,16 @@ discord.py>=2.3.0
 python-dotenv>=1.0.0
 numpy>=1.22.0
 pyyaml>=6.0
+supabase>=1.0.0
+```
+
+### Memory System Dependencies
+```
+supabase>=1.0.0
+pgvector>=0.1.0
+openai>=1.0.0
+numpy>=1.22.0
+redis>=4.5.4
 ```
 
 ### Development Dependencies
@@ -206,6 +239,8 @@ python -m build --wheel
      -e FTP_USERNAME=... \
      -e FTP_PASSWORD=... \
      -e HTTP_SERVER=... \
+     -e SUPABASE_URL=... \
+     -e SUPABASE_SERVICE_ROLE_KEY=... \
      carrier:latest
    ```
 
@@ -230,21 +265,31 @@ python -m build --wheel
    - Test component interactions
    - Database operations with test database
    - Tool integrations with mock services
+   - Memory system integration with agent runtime
 
 3. **Functional Tests**:
    - End-to-end flow testing
    - API endpoint functionality
    - Agent behavior testing with fixed LLM responses
+   - Memory retrieval and storage testing
 
 4. **Performance Tests**:
    - Memory usage optimization
    - Response time benchmarking
    - Concurrent request handling
+   - Vector search performance testing
 
 ### LLM Testing Strategy
 - Deterministic LLM responses for testing
 - Evaluation metrics for response quality
 - Regression test suite for agent behaviors
+
+### Memory System Testing
+- Integration tests for memory hooks
+- Vector similarity search testing
+- Embedding generation testing
+- Memory manager functionality testing
+- Performance testing for large memory stores
 
 ## Integration Points
 
@@ -254,6 +299,7 @@ python -m build --wheel
 - **Instagram Graph API**: For media posting and status checking
 - **Vector Database**: For efficient semantic search
 - **External Tool APIs**: Services agents can use
+- **OpenAI Embeddings API**: For vector representation of text
 
 ### Client Integrations
 - **Discord Client**: Integration with Discord servers and channels
@@ -278,6 +324,93 @@ python -m build --wheel
 - **JWT**: For user session management
 - **Bot Token**: For Discord API authentication
 - **Access Token**: For Instagram Graph API authentication
+- **Supabase Service Role Key**: For database access
+
+### Memory System Integration
+- **Supabase**: For memory storage and retrieval
+- **OpenAI Embeddings API**: For vector representation
+- **PostgreSQL with pgvector**: For vector operations
+- **Memory Hooks**: For agent runtime integration
+- **Memory CLI**: For management operations
+- **Memory Cache**: For performance optimization
+
+## Memory System Architecture
+
+### Database Schema
+The memory system uses a PostgreSQL database with the pgvector extension for vector operations. The main tables are:
+
+1. **memories**: Stores all memory objects with vector embeddings
+   - id: UUID (primary key)
+   - type: TEXT (message, description, lore, document, knowledge)
+   - content: JSONB (memory content)
+   - embedding: vector(1536) (OpenAI embedding)
+   - user_id: TEXT (user identifier)
+   - room_id: TEXT (conversation/room identifier)
+   - agent_id: TEXT (agent identifier)
+   - metadata: JSONB (additional metadata)
+   - created_at: TIMESTAMP (creation timestamp)
+
+2. **relationships**: Stores relationship information between users and agents
+   - id: UUID (primary key)
+   - user_id: TEXT (user identifier)
+   - agent_id: TEXT (agent identifier)
+   - interaction_count: INTEGER (number of interactions)
+   - sentiment_score: FLOAT (relationship sentiment)
+   - metadata: JSONB (additional metadata)
+   - last_interaction: TIMESTAMP (last interaction timestamp)
+   - created_at: TIMESTAMP (creation timestamp)
+
+### Vector Search
+The memory system uses vector similarity search for retrieving relevant memories:
+
+```sql
+SELECT
+    m.id,
+    m.type,
+    m.content,
+    m.embedding,
+    m.user_id,
+    m.room_id,
+    m.agent_id,
+    m.metadata,
+    m.created_at,
+    1 - (m.embedding <=> $1) as similarity
+FROM
+    memories m
+WHERE
+    m.embedding IS NOT NULL AND
+    1 - (m.embedding <=> $1) > $2
+ORDER BY
+    m.embedding <=> $1
+LIMIT $3
+```
+
+### Memory Managers
+The memory system provides specialized managers for different memory types:
+
+1. **MessageManager**: Handles conversation messages
+2. **DescriptionManager**: Manages user descriptions
+3. **LoreManager**: Stores agent background information
+4. **DocumentsManager**: Handles large documents
+5. **KnowledgeManager**: Manages searchable knowledge fragments
+6. **RAGKnowledgeManager**: Implements retrieval-augmented generation
+
+### Memory CLI
+The memory system includes a CLI tool for management operations:
+
+```bash
+# List memories
+python -m src.tools.memory_cli list --agent assistant --format
+
+# Clear memories
+python -m src.tools.memory_cli clear assistant
+
+# Test similar memory retrieval
+python -m src.tools.memory_cli similar "query text" --agent assistant
+
+# Initialize database schema
+python -m src.tools.memory_cli init
+```
 
 ## Notes
 The Carrier project is designed as a Python reimplementation of the ElizaOS runtime loop, with adaptations to leverage Python's strengths in asyncio, data validation (Pydantic), and web services (FastAPI). The architecture maintains the core concepts of ElizaOS while providing a more Pythonic experience for developers.
@@ -285,5 +418,7 @@ The Carrier project is designed as a Python reimplementation of the ElizaOS runt
 Key differences from ElizaOS include the use of Python's async/await pattern, Pydantic models for data validation, and FastAPI for HTTP endpoints. The memory system utilizes PostgreSQL with vector extensions for efficient semantic search, which is critical for the context-aware agent functionality.
 
 The multi-client architecture allows for integration with different platforms, with Discord providing conversational interactions and Instagram enabling media posting capabilities. Each client implementation follows a similar pattern with client-specific adaptations for the unique requirements of each platform. The Discord client uses discord.py for event-based message handling, while the Instagram client uses the Instagram Graph API with a two-step posting process (container creation followed by publishing).
+
+The memory system extends the framework's capabilities by providing persistent storage and retrieval of interactions, enabling context-aware responses across multiple conversations and platforms. The vector-based approach allows for semantic search, retrieving memories based on content similarity rather than just exact matches or timestamps.
 
 The FTP integration for Instagram media posting demonstrates how the framework can handle different types of content beyond text, providing a foundation for future expansions to additional media types and platforms.

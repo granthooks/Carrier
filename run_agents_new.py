@@ -17,17 +17,14 @@ load_dotenv()
 # Add the src directory to the path so we can import the agents module
 sys.path.append(os.path.abspath("src"))
 
-# Import Carrier agent framework
-from agents import Agent, Runner, RunContextWrapper, RunHooks, Usage, TResponseInputItem
-from agents.tool import function_tool  # Import the function_tool helper
-from agents.agent import AgentMemory  # Import AgentMemory from its new location
+# Import standard OpenAI Agents SDK
+from agents import Agent, Runner, RunContextWrapper, RunHooks, Usage, Tool, function_tool
 
-# Import clients from their new modules
-from src.clients.discord_client import DiscordAgentClient, DiscordHooks
-from src.clients.instagram_client import InstagramAgentClient, InstagramHooks
-
-# Import logging utility
-from src.utils.logging import configure_logging
+# Import Carrier extensions
+from src.carrier.extensions.carrier_agent import AgentMemory, CarrierAgent
+from src.carrier.clients.discord_client import DiscordAgentClient
+from src.carrier.clients.instagram_client import InstagramAgentClient
+from src.carrier.utils.logging import configure_logging
 
 # Configure logging
 logger = configure_logging()
@@ -165,7 +162,7 @@ def build_system_prompt(character_data: Dict[str, Any], client: str = "generic",
     return system_prompt
 
 async def initialize_agent(character_file: str, client: str = "generic") -> Tuple[Agent, AgentMemory]:
-    """Step 1: Agent Initialization"""
+    """Initialize a Carrier agent from character file"""
     logger.info(f"Initializing agent from {character_file} for {client}")
     
     # Load the character file
@@ -180,25 +177,24 @@ async def initialize_agent(character_file: str, client: str = "generic") -> Tupl
     # Build the system prompt from character data (including tool descriptions)
     system_prompt = build_system_prompt(character_data, client, tool_descriptions)
     
-    # Initialize the agent with configured tools
-    agent = Agent(
+    # Initialize the standard OpenAI Agent
+    base_agent = Agent(
         name=character_data.get("name", "Agent"),
         instructions=system_prompt,
         model=character_data.get("model", "gpt-4o-mini"),
         tools=configured_tools 
     )
     
-    # Initialize memory - allow this to raise exceptions to fail the agent initialization
-    try:
-        memory = AgentMemory(client=client)
-    except Exception as e:
-        logger.error(f"CRITICAL ERROR: Failed to initialize memory for {agent.name}: {e}")
-        logger.error("Agent cannot function without memory. Initialization aborted.")
-        raise RuntimeError(f"Failed to initialize agent memory: {e}") from e
+    # Initialize memory
+    memory = AgentMemory(client=client)
+    
+    # Convert to CarrierAgent with memory
+    agent = CarrierAgent.from_agent(base_agent, memory)
     
     # List tools in uppercase with brackets between each tool
     tools_list = ", ".join([tool.name.upper() for tool in agent.tools]) if agent.tools else "NO TOOLS"
     logger.info(f"{agent.name} initialized with {tools_list} for {client}")
+    
     return agent, memory
 
 async def generate_image(description: str) -> Optional[bytes]:
@@ -266,13 +262,13 @@ async def main():
             username = character_data.get("username")
             supported_clients = character_data.get("clients", [])
             
-            # Initialize the agent
-            agent, memory = await initialize_agent(char_file)
-            
-            # Initialize clients based on character configuration
+            # Initialize Discord client if supported
             if "Discord" in supported_clients:
                 discord_token = os.getenv(f"{username}_DISCORD_API_TOKEN")
                 if discord_token:
+                    # Initialize agent for Discord
+                    agent, memory = await initialize_agent(char_file, client="discord")
+                    
                     # Create dedicated Discord client for this agent
                     discord_client = DiscordAgentClient(agent, memory)
                     
@@ -293,9 +289,13 @@ async def main():
                 else:
                     logger.error(f"Missing Discord token for {username}")
             
+            # Initialize Instagram client if supported
             if "Instagram" in supported_clients:
                 instagram_token = os.getenv(f"{username}_INSTAGRAM_ACCESS_TOKEN")
                 if instagram_token:
+                    # Initialize agent for Instagram
+                    agent, memory = await initialize_agent(char_file, client="instagram")
+                    
                     # Create dedicated Instagram client for this agent
                     instagram_client = InstagramAgentClient(agent, memory)
                     client_tasks.append(asyncio.create_task(
@@ -304,9 +304,7 @@ async def main():
                 else:
                     logger.error(f"Missing Instagram token for {username}")
                     
-            if "Twitter" in supported_clients:
-                # Similar logic for Twitter client
-                pass
+            # Support for other client types can be added here
                 
         except Exception as e:
             logger.error(f"Error initializing agent from {char_file}: {e}")

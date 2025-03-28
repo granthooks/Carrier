@@ -51,6 +51,79 @@ The Python implementation leans heavily on async/await:
 - Implement non-blocking database operations
 - Design event-driven message processing
 
+### Memory System Pattern
+The memory system follows a layered architecture:
+- **Core MemorySystem**: Handles database operations and embedding generation
+- **Specialized Memory Managers**: Provide tailored interfaces for different memory types
+- **Memory Hooks**: Integrate memory with agent runtime
+- **Memory Cache**: Optimizes performance for frequently accessed data
+
+```python
+# Core MemorySystem for database operations
+class MemorySystem:
+    async def store_memory(self, content, memory_type, user_id, room_id, agent_id, metadata=None):
+        # Generate embedding and store in database
+        
+    async def retrieve_similar(self, query, threshold=0.7, limit=10, memory_type=None):
+        # Perform vector similarity search
+        
+# Specialized memory manager for messages
+class MessageManager:
+    async def create_memory(self, message):
+        # Create a message memory
+        
+    async def get_conversation(self, user_id, room_id, agent_id, limit=20):
+        # Get conversation history
+        
+# Memory hooks for runtime integration
+class MemoryContextHooks:
+    async def on_agent_start(self, context, agent):
+        # Add conversation history to system prompt
+```
+
+### Vector Similarity Search Pattern
+The memory system uses vector embeddings for semantic search:
+- Generate embeddings for all stored memories
+- Generate embedding for search query
+- Perform vector similarity search using cosine similarity
+- Return memories above similarity threshold
+
+```python
+# Vector similarity search in PostgreSQL
+"""
+SELECT
+    m.id,
+    m.type,
+    m.content,
+    m.embedding,
+    m.user_id,
+    m.room_id,
+    m.agent_id,
+    m.metadata,
+    m.created_at,
+    1 - (m.embedding <=> $1) as similarity
+FROM
+    %I.memories m
+WHERE
+    m.embedding IS NOT NULL AND
+    1 - (m.embedding <=> $1) > $2
+ORDER BY
+    m.embedding <=> $1
+LIMIT $3
+"""
+```
+
+### Memory Manager Pattern
+Specialized memory managers for different memory types:
+- **MessageManager**: Conversation messages
+- **DescriptionManager**: User descriptions
+- **LoreManager**: Agent background information
+- **DocumentsManager**: Large documents
+- **KnowledgeManager**: Searchable knowledge fragments
+- **RAGKnowledgeManager**: Retrieval-augmented generation
+
+Each manager extends BaseMemoryManager and provides specialized methods for its memory type.
+
 ## User Preferences
 
 ### Python Implementation Style
@@ -66,6 +139,14 @@ The Python implementation leans heavily on async/await:
 - Use mermaid diagrams for visualizing relationships
 - Document data flows between components
 
+### Memory System Preferences
+- Supabase for database backend
+- PostgreSQL with vector extensions for semantic search
+- OpenAI embeddings for vector representation
+- Specialized memory managers for different memory types
+- Memory hooks for runtime integration
+- CLI tools for memory management
+
 ## Implementation Paths
 
 ### Core Runtime Implementation
@@ -77,7 +158,7 @@ The Python implementation leans heavily on async/await:
 6. Add response generation (implemented through Runner.run)
 7. Set up action execution (tool execution framework started)
 8. Add evaluation system (hook available but minimally implemented)
-9. Implement memory storage (basic implementation with AgentMemory dataclass)
+9. Implement memory storage (implemented through MemorySystem)
 
 ### Discord Integration Implementation
 1. Set up Discord client using discord.py (DiscordAgentClient class)
@@ -96,6 +177,17 @@ The Python implementation leans heavily on async/await:
 5. Add error handling and reconnection logic
 6. Integrate with Agent/Runner for logging and context
 7. Maintain context with AgentMemory
+
+### Memory System Implementation
+1. Define database schema with vector extensions
+2. Implement core MemorySystem class for database operations
+3. Create embedding generation functionality
+4. Implement vector similarity search
+5. Create specialized memory managers for different memory types
+6. Implement memory hooks for runtime integration
+7. Add memory CLI tool for management
+8. Create memory cache for performance optimization
+9. Implement integration tests for verification
 
 ### Tool Integration Implementation
 1. Define abstract Tool interface
@@ -116,12 +208,38 @@ The Python implementation leans heavily on async/await:
 
 ### Memory Retrieval Optimization
 The memory retrieval system for context-aware responses needs careful design:
-- Balance between recall and precision
+- Balance between recall and precision in vector search
 - Efficient vector operations for semantic search
 - Caching strategies for frequent queries
 - Handling of long-term vs. short-term memory
 - Current implementation stores full conversation history in memory
 - Tracking client source in memory objects for multi-client support
+- Optimizing embedding generation to reduce API costs
+- Implementing memory pruning and summarization for long conversations
+- Handling very large memory stores efficiently
+- Optimizing database indices for vector search
+
+### Memory System Scaling
+Scaling the memory system for production use:
+- Partitioning memory storage by agent and time
+- Implementing read replicas for memory retrieval
+- Optimizing vector indices for large-scale similarity search
+- Batching embedding generation for efficiency
+- Implementing memory retention policies
+- Managing memory storage growth over time
+- Implementing memory backup and recovery procedures
+- Handling memory migration and versioning
+
+### Memory Privacy and Security
+Ensuring proper memory privacy and security:
+- Implementing access controls for memory retrieval
+- User-specific memory isolation
+- Configurable memory retention policies
+- Consent management for memory storage
+- Encryption of sensitive memory content
+- Audit logging for memory access
+- Compliance with data protection regulations
+- Implementing memory export and deletion capabilities
 
 ### Discord Client Challenges
 - Handling Discord API rate limits
@@ -184,6 +302,17 @@ Managing async database operations efficiently:
 - Example: assistantbot.json for Discord and Instagram agent
 - Client-specific context added to system prompt during initialization
 
+### Memory System Tools
+- Supabase for database backend
+- PostgreSQL with vector extensions for semantic search
+- OpenAI embeddings API for vector representation
+- Memory CLI tool for management operations:
+  - Listing memories with filtering
+  - Clearing memories with confirmation
+  - Testing similarity search
+  - Initializing database schema
+- Integration tests for verifying functionality
+
 ### Python Development Tools
 - Anaconda environment named "carrier" with Python 3.9
 - Black for code formatting
@@ -227,10 +356,24 @@ Managing async database operations efficiently:
 - Client-specific hooks for each client type
 - Concurrent client operation in run_agent.py
 
+### Memory System Decisions
+- Supabase with PostgreSQL for database backend
+- Vector extensions for semantic search
+- OpenAI embeddings for vector representation
+- Specialized memory managers for different memory types
+- Memory hooks for runtime integration
+- Memory CLI tool for management
+- Memory cache for performance optimization
+- Memory integration tests for verification
+- Memory database schema with vector indices
+- Memory retention based on agent, user, and room
+
 ### Database Decisions
 - PostgreSQL with vector extension chosen over specialized vector databases
 - Decision to use SQLAlchemy for ORM capabilities
 - Choice of connection pooling approach
+- Schema design with vector indices for similarity search
+- Memory partitioning by type, agent, user, and room
 
 ## Notes
 The Carrier project takes strong inspiration from ElizaOS but adapts its patterns to leverage Python's strengths. The core runtime loop remains the same conceptually, but the implementation details differ to align with Python's ecosystem and paradigms.
@@ -238,5 +381,7 @@ The Carrier project takes strong inspiration from ElizaOS but adapts its pattern
 The current implementation demonstrates the 7-step runtime loop with hooks for each stage, using the Agent class for basic agent representation and the Runner for processing. The Discord and Instagram integrations serve as practical applications of the framework, showing how agents can interact through different channels while maintaining a consistent processing approach.
 
 The multi-client architecture demonstrates the flexibility of the framework, allowing agents to interact through different channels (Discord for conversational interactions, Instagram for media posting) while sharing the same core processing pipeline. Each client implementation follows the same pattern of hooks and event handling, but with client-specific adaptations for the unique requirements of each platform.
+
+The memory system extends the framework's capabilities by providing persistent storage and retrieval of interactions, enabling context-aware responses across multiple conversations and platforms. The vector-based approach allows for semantic search, retrieving memories based on content similarity rather than just exact matches or timestamps.
 
 Future development will focus on enhancing the memory system, improving tool integration, refining the agent runtime components for more sophisticated processing and response generation, and expanding the multi-client architecture to support additional platforms and interaction types.

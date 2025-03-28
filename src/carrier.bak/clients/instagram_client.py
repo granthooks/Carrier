@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Instagram Client for Carrier Agent Framework
 
@@ -16,10 +15,16 @@ from ftplib import FTP
 from datetime import datetime
 
 from agents import Agent, Runner, RunContextWrapper, RunHooks
+
 from ..utils.logging import configure_logging
+from ..utils.hooks_util import add_memory_hooks
+from ..extensions.carrieragent import AgentMemory
 
 # Configure logging
 logger = configure_logging()
+
+# base url for instagram api
+BASE_URL = "https://graph.instagram.com"
 
 class InstagramHooks(RunHooks):
     """Instagram-specific hooks for the agent runtime"""
@@ -42,12 +47,10 @@ class InstagramHooks(RunHooks):
     
     async def on_agent_end(self, context: RunContextWrapper, agent: Agent, output: Any) -> None:
         """Called when agent processing completes"""
-        from ..agents.agent import AgentMemory  # Import here to avoid circular imports
-        
-        memory: AgentMemory = context.context
+        memory = self._get_memory_from_context(context)
         
         # Store conversation in memory for future context
-        if hasattr(output, 'content') and output.content:
+        if memory and hasattr(output, 'content') and output.content:
             memory.conversation_history.append({
                 "role": "assistant",
                 "content": output.content,
@@ -57,12 +60,48 @@ class InstagramHooks(RunHooks):
             logger.info(f"[{self.client}] Memory contains {len(memory.conversation_history)} messages")
         
         logger.info(f"[{self.client}] Response generated and stored in memory")
+    
+    def _get_memory_from_context(self, context: RunContextWrapper) -> Optional[AgentMemory]:
+        """Get memory object from context if available."""
+        if not context or not context.context:
+            return None
+            
+        # If context is directly a memory object
+        if isinstance(context.context, AgentMemory):
+            return context.context
+            
+        # If context has a memory attribute
+        if hasattr(context.context, 'memory'):
+            return context.context.memory
+            
+        return None
+
+
+def get_hooks_with_memory(agent: Agent, user_id: str, room_id: str) -> RunHooks:
+    """Get appropriate hooks with memory context if available.
+    
+    Args:
+        agent: Agent to use
+        user_id: User ID for memory context
+        room_id: Room ID for memory context
+        
+    Returns:
+        Appropriate hooks instance with memory context if available
+    """
+    return add_memory_hooks(
+        base_hooks_class=InstagramHooks,
+        agent=agent,
+        user_id=user_id,
+        room_id=room_id,
+        conversation_limit=10,
+        client_name="Instagram"
+    )
 
 
 class InstagramAgentClient:
     """Instagram client that manages a single agent interaction"""
     
-    def __init__(self, agent: Agent, memory: Any):
+    def __init__(self, agent: Agent, memory: AgentMemory):
         """Initialize the Instagram client for a specific agent"""
         # Store agent and memory directly
         self.agent = agent
@@ -311,10 +350,13 @@ class InstagramAgentClient:
         """Get the publishing limit status"""
         logger.info("Getting publishing limit...")
         try:
-            url = f"{self.instagram_credentials[0]}/v22.0/{self.instagram_credentials[0]}/content_publishing_limit"
+            url = f"{BASE_URL}/v22.0/{self.instagram_credentials[0]}/content_publishing_limit"
             param = {
                 'access_token': self.instagram_credentials[1]
             }
+            
+            logger.info(f"URL: {url}")
+            logger.info(f"Params: {param}")
             
             # Make the API request
             async with aiohttp.ClientSession() as session:
@@ -328,11 +370,41 @@ class InstagramAgentClient:
             logger.error(f"Error getting publishing limit: {e}")
             return None
     
-    async def _check_instagram_activities(self):
-        """Check for scheduled posts, mentions, or DMs"""
-        # Implementation of _check_instagram_activities method
-        # This method should implement the logic to check for scheduled posts, mentions, or DMs
-        # and process them accordingly.
-        # For example, it could use the self.agent to process the activities.
-        # This is a placeholder and should be implemented according to your specific requirements.
-        pass 
+    async def get_user_media(self, user_id=None, fields=None):
+        """
+        Retrieve media from an Instagram account using the Graph API.
+        
+        Args:
+            user_id: The Instagram user ID to retrieve media from (defaults to authenticated user)
+            fields: The fields to retrieve (defaults to followers_count and media details)
+            
+        Returns:
+            JSON response with user media data
+        """
+        logger.info(f"Retrieving media for user: {user_id or 'self'}")
+        try:
+            # Default to the authenticated user if no user_id provided
+            target_id = user_id or self.instagram_credentials[0]
+            
+            # Default fields if none provided
+            if fields is None:
+                fields = "followers_count,media{media_type,caption,timestamp,like_count}"
+            
+            url = f"{BASE_URL}/v22.0/{target_id}"
+            params = {
+                'fields': fields,
+                'access_token': self.instagram_credentials[1]
+            }
+            
+            logger.info(f"URL: {url}")
+            logger.info(f"Params: {params}")
+            
+            # Make the API request
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params) as response:
+                    result = await response.json()
+                    logger.info(f"Retrieved media data: {result}")
+                    return result
+        except Exception as e:
+            logger.error(f"Error retrieving user media: {e}")
+            return None
