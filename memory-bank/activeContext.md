@@ -7,7 +7,8 @@
 * Integrating memory system with agent runtime through hooks
 * Implementing CLI tools for memory management
 * Testing memory integration with agents
-* Refining the Discord and Instagram integrations with different character files
+* Enhancing the Instagram integration with different character files
+* Implementing multi-agent support for concurrent client operation
 
 ## Recent Changes
 * March 13, 2025: Created memory bank directory and initialized core documentation files
@@ -32,6 +33,9 @@
 * March 20, 2025: Implemented integration tests for memory system
 * March 20, 2025: Added vector search capabilities for semantic memory retrieval
 * March 20, 2025: Implemented RAG knowledge manager for retrieval-augmented generation
+* March 27, 2025: Fixed Discord client parameter naming in Runner.run() method (using starting_agent instead of agent)
+* March 27, 2025: Improved Discord channel configuration by reading from character files instead of hardcoding
+* March 27, 2025: Enhanced run_agents.py to support multiple agents with different client configurations
 
 ## Next Steps
 * Optimize memory retrieval for better performance with large memory stores
@@ -85,7 +89,8 @@
 * Implementing memory backup and recovery procedures
 * Balancing memory retention with storage constraints
 * Implementing memory analytics for optimization
-* Handling Discord message events and rate limiting
+* Maintaining consistent parameter naming conventions across the OpenAI Agents SDK integration
+* Standardizing configuration approaches for different client types
 * Multi-agent management for different Discord channels or servers
 * Handling long-running Discord and Instagram connections and reconnection strategies
 * Managing Discord and Instagram API rate limits in high-traffic environments

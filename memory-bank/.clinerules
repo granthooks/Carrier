@@ -247,6 +247,8 @@ Ensuring proper memory privacy and security:
 - Implementing proper reconnection logic
 - Managing multiple agents in shared channels
 - Processing mentions correctly in various message formats
+- Using numeric channel IDs (snowflakes) instead of channel names
+- Configuring channel settings through character files rather than hardcoding
 
 ### Instagram Client Challenges
 - Managing Instagram Graph API publishing limits (25 posts per day)
@@ -355,6 +357,8 @@ Managing async database operations efficiently:
 - Agent/Runner pattern for message processing
 - Client-specific hooks for each client type
 - Concurrent client operation in run_agent.py
+- OpenAI Agents SDK parameter naming conventions (starting_agent instead of agent)
+- Configuration-driven approach for client settings via character files
 
 ### Memory System Decisions
 - Supabase with PostgreSQL for database backend

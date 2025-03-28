@@ -22,6 +22,9 @@
 * Mention detection and handling in Discord
 * Media posting capabilities for Instagram
 * Concurrent operation of multiple client interfaces
+* Proper parameter naming in Runner.run() method (using starting_agent instead of agent)
+* Discord channel configuration from character files instead of hardcoding
+* Multi-agent support with different client configurations
 * Memory system core implementation with Supabase backend
 * Vector embeddings for semantic memory search
 * Specialized memory managers for different memory types:
@@ -53,8 +56,6 @@
   * Memory analytics for usage patterns
 * Discord client integration improvements:
   * Enhance Discord event handling for edge cases
-  * Improve multi-agent support
-  * Add channel-specific handling
   * Implement error recovery and reconnection logic
 * Instagram client integration improvements:
   * Enhance media posting capabilities
@@ -77,9 +78,9 @@
 * Initial implementation phase in progress
 * Core patterns and components defined and partially implemented
 * Technical decisions documented and applied
-* Discord integration implemented and ready for testing
+* Discord integration implemented and fully functional
 * Instagram integration implemented and ready for testing
-* Multi-client architecture established
+* Multi-client architecture established and working
 * CLI agent implementation complete and working
 * Instagram CLI testing tool implemented
 * Memory system core implementation complete
@@ -98,7 +99,6 @@
 * Security considerations for tool usage need further development
 * Discord rate limits need to be managed for high-traffic channels
 * Instagram publishing limits need to be managed for media posting
-* Multi-agent management complexity in shared environments
 * Error handling and recovery needs improvement
 * Long-running client connections require reconnection strategies
 * FTP upload process needs optimization and error handling
@@ -122,6 +122,7 @@
 * [✓] CLI agent implementation (March 14, 2025)
 * [✓] Client interfaces:
   * [✓] Discord client implementation (March 14, 2025)
+  * [✓] Discord client parameter fixes and improvements (March 27, 2025)
   * [✓] Instagram client implementation (March 15-17, 2025)
   * [ ] Other client interfaces
 * [✓] Memory system implementation:
@@ -158,6 +159,7 @@
 12. Develop memory privacy controls and access management
 13. Implement memory retention policies and automatic cleanup
 14. Create memory analytics for usage patterns and optimization
+15. Enhance Instagram client with improved error handling
 
 ## Notes
 The project has made significant progress with the implementation of the memory system, which provides a foundation for context-aware agent interactions. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.
