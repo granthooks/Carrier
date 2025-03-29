@@ -71,6 +71,10 @@
 * Additional client interfaces for interacting with agents
 * Tool integrations for agent capabilities
 * Testing framework for agent behavior validation
+* MCP Server Integration:
+    * Connection logic for specific MCP servers
+    * Integration of MCP tool listing/calling into runtime
+    * Testing MCP tool execution
 
 ## Current Status
 * Planning phase complete
@@ -90,6 +94,7 @@
 * Memory integration tests implemented and passing
 * Vector search capabilities implemented for semantic retrieval
 * RAG knowledge manager implemented for retrieval-augmented generation
+* MCP integration planning initiated based on OpenAI Agent SDK
 
 ## Known Issues
 * Memory retrieval system needs optimization for very large memory stores
@@ -141,25 +146,32 @@
   * [ ] Provider System
 * [ ] API layer implementation
 * [ ] Tool integration framework
+* [ ] MCP Server Integration
 * [ ] Testing and validation
 * [ ] Initial release
 
 ## Next Tasks
-1. Optimize memory retrieval for better performance with large memory stores
-2. Implement improved caching strategies for frequently accessed memories
-3. Add memory persistence across agent restarts
-4. Enhance vector search with improved embedding models
-5. Implement memory pruning and summarization for long-running conversations
-6. Add relationship tracking between users and agents
-7. Implement sentiment analysis for relationship quality assessment
-8. Create memory visualization tools for debugging and analysis
-9. Integrate memory system with Discord and Instagram clients
-10. Implement memory-aware response generation for more contextual responses
-11. Add memory export/import functionality for backup and migration
-12. Develop memory privacy controls and access management
-13. Implement memory retention policies and automatic cleanup
-14. Create memory analytics for usage patterns and optimization
-15. Enhance Instagram client with improved error handling
+1. **MCP Integration:**
+    * Implement connection logic for specific MCP servers (e.g., filesystem).
+    * Integrate MCP tool listing and calling into Agent Runtime/Action Manager.
+    * Test MCP tool execution flow.
+    * Explore MCP server caching.
+2. **Memory System Optimizations:**
+    * Optimize memory retrieval performance.
+    * Implement improved caching strategies.
+    * Add memory persistence across restarts.
+    * Enhance vector search.
+    * Implement memory pruning/summarization.
+    * Add relationship tracking & sentiment analysis.
+    * Create memory visualization tools.
+    * Integrate memory system with clients.
+    * Implement memory-aware response generation.
+    * Add memory export/import.
+    * Develop privacy controls.
+    * Implement retention policies.
+    * Create memory analytics.
+3. **Client Enhancements:**
+    * Enhance Instagram client error handling.
 
 ## Notes
 The project has made significant progress with the implementation of the memory system, which provides a foundation for context-aware agent interactions. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.

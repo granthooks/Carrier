@@ -6,7 +6,7 @@ Carrier exists to enable the creation and deployment of autonomous AI Agents cap
 ## Problems to Solve
 1. **Complex Task Automation**: Automate complex, multi-step tasks that require reasoning and decision-making
 2. **Human-AI Collaboration**: Create AI assistants that can understand context, maintain conversation history, and provide helpful responses
-3. **Tool Integration Complexity**: Simplify the process of giving AI agents access to external tools and services
+3. **Tool Integration Complexity**: Simplify the process of giving AI agents access to external tools and services, leveraging standards like the Model Context Protocol (MCP).
 4. **Agent Personalization**: Enable the creation of agents with distinct personalities and capabilities for different use cases
 5. **Memory Management**: Provide effective memory systems for agents to recall and utilize past interactions
 
@@ -27,11 +27,12 @@ Carrier exists to enable the creation and deployment of autonomous AI Agents cap
 ## Key Features
 1. **Runtime Loop Architecture**: A robust processing loop for receiving, processing, and responding to messages
 2. **Agent Personalization System**: Framework for defining agent personalities and characteristics
-3. **Tool Integration Framework**: System for connecting agents to external tools and services
+3. **Tool Integration Framework**: System for connecting agents to external tools and services, including MCP server integration.
 4. **Memory System**: Storage and retrieval mechanisms for maintaining conversation context
 5. **Multi-client Support**: Ability to connect agents to various communication channels
 6. **Evaluation System**: Mechanisms to assess and improve agent responses
 7. **Asynchronous Processing**: Efficient handling of concurrent operations
+8. **MCP Server Integration**: Support for connecting to and utilizing tools from MCP servers via the OpenAI Agent SDK.
 
 ## Success Metrics
 1. **Task Completion Rate**: Percentage of tasks agents successfully complete
@@ -49,11 +50,13 @@ Carrier exists to enable the creation and deployment of autonomous AI Agents cap
 5. **Privacy Requirements**: Handling of user data and conversation history
 
 ## Related Systems
-1. **ElizaOS**: Node.js-based agent framework that inspired Carrier's architecture
-2. **LangChain**: Framework for building applications with language models
-3. **AutoGPT**: Autonomous GPT-4 based agents
-4. **OpenAI Assistants API**: API for creating AI assistants with specific instructions
-5. **Semantic Kernel**: Framework for integrating AI services with programming languages
+1. **OpenAI Agent SDK**: The foundational SDK upon which Carrier is built, providing core agent capabilities and MCP support.
+2. **ElizaOS**: Node.js-based agent framework that inspired Carrier's runtime loop architecture.
+3. **LangChain**: Framework for building applications with language models.
+4. **AutoGPT**: Autonomous GPT-4 based agents.
+5. **OpenAI Assistants API**: API for creating AI assistants with specific instructions.
+6. **Semantic Kernel**: Framework for integrating AI services with programming languages.
+7. **Model Context Protocol (MCP)**: The open protocol used for standardized tool and context provision.
 
 ## Notes
-The Carrier project draws significant inspiration from ElizaOS's runtime loop architecture while implementing it in Python. This allows us to leverage Python's strengths in areas like asynchronous programming (asyncio), data validation (Pydantic), and web services (FastAPI) while maintaining the core architectural patterns that make ElizaOS effective.
+The Carrier project is built upon the OpenAI Agent SDK and draws significant inspiration from ElizaOS's runtime loop architecture while implementing it in Python. This allows us to leverage Python's strengths in areas like asynchronous programming (asyncio), data validation (Pydantic), and web services (FastAPI) while utilizing the SDK's foundation for agent management and MCP integration.

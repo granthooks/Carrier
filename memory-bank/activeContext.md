@@ -1,14 +1,15 @@
 # Active Context: Carrier
 
 ## Current Focus
-* Implementing a robust memory system for Carrier agents
-* Developing Supabase integration with PostgreSQL and vector extensions for memory storage
-* Creating specialized memory managers for different memory types
-* Integrating memory system with agent runtime through hooks
-* Implementing CLI tools for memory management
-* Testing memory integration with agents
-* Enhancing the Instagram integration with different character files
-* Implementing multi-agent support for concurrent client operation
+* Integrating MCP (Model Context Protocol) servers using the OpenAI Agent SDK for standardized tool access.
+* Implementing a robust memory system for Carrier agents.
+* Developing Supabase integration with PostgreSQL and vector extensions for memory storage.
+* Creating specialized memory managers for different memory types.
+* Integrating memory system with agent runtime through hooks.
+* Implementing CLI tools for memory management.
+* Testing memory integration with agents.
+* Enhancing the Instagram integration with different character files.
+* Implementing multi-agent support for concurrent client operation.
 
 ## Recent Changes
 * March 13, 2025: Created memory bank directory and initialized core documentation files
@@ -36,22 +37,29 @@
 * March 27, 2025: Fixed Discord client parameter naming in Runner.run() method (using starting_agent instead of agent)
 * March 27, 2025: Improved Discord channel configuration by reading from character files instead of hardcoding
 * March 27, 2025: Enhanced run_agents.py to support multiple agents with different client configurations
+* March 28, 2025: Initiated integration of MCP servers using the OpenAI Agent SDK framework. Updated memory bank documentation to reflect this new focus.
 
 ## Next Steps
-* Optimize memory retrieval for better performance with large memory stores
-* Implement caching strategies for frequently accessed memories
-* Add memory persistence across agent restarts
-* Enhance vector search with improved embedding models
-* Implement memory pruning and summarization for long-running conversations
-* Add relationship tracking between users and agents
-* Implement sentiment analysis for relationship quality assessment
-* Create memory visualization tools for debugging and analysis
-* Integrate memory system with Discord and Instagram clients
-* Implement memory-aware response generation for more contextual responses
-* Add memory export/import functionality for backup and migration
-* Develop memory privacy controls and access management
-* Implement memory retention policies and automatic cleanup
-* Create memory analytics for usage patterns and optimization
+* **MCP Integration:**
+    * Implement connection logic for specific MCP servers (e.g., filesystem, web search).
+    * Integrate MCP tool listing and calling into the Agent Runtime and Action Manager.
+    * Test MCP tool execution flow.
+    * Explore MCP server caching mechanisms (`cache_tools_list`).
+* **Memory System:**
+    * Optimize memory retrieval for better performance with large memory stores.
+    * Implement caching strategies for frequently accessed memories.
+    * Add memory persistence across agent restarts.
+    * Enhance vector search with improved embedding models.
+    * Implement memory pruning and summarization for long-running conversations.
+    * Add relationship tracking between users and agents.
+    * Implement sentiment analysis for relationship quality assessment.
+    * Create memory visualization tools for debugging and analysis.
+    * Integrate memory system with Discord and Instagram clients.
+    * Implement memory-aware response generation for more contextual responses.
+    * Add memory export/import functionality for backup and migration.
+    * Develop memory privacy controls and access management.
+    * Implement memory retention policies and automatic cleanup.
+    * Create memory analytics for usage patterns and optimization.
 
 ## Active Decisions
 * Python will be the primary implementation language
@@ -97,10 +105,16 @@
 * Optimizing media file uploads for Instagram posting
 * Handling Instagram API publishing limits and quotas
 * Implementing robust error handling for Instagram media posting
+* **MCP Considerations:**
+    * Managing the lifecycle of stdio MCP servers (subprocess management).
+    * Handling potential errors from MCP servers during tool listing or execution.
+    * Ensuring compatibility with different MCP server implementations and versions.
+    * Deciding on caching strategies for MCP tool lists (`cache_tools_list`).
+    * Security implications of running external MCP server processes or connecting to remote ones.
 
 ## Notes
 The project has moved from client integration to memory system implementation, with the core memory components now in place. The MemorySystem class provides the foundation for memory storage and retrieval, while specialized memory managers offer tailored interfaces for different memory types. The memory hooks integrate conversation history with agent context, enabling more contextual responses.
 
 The implementation follows the 7-step runtime loop outlined in the project brief, with memory storage and retrieval integrated at appropriate points in the processing pipeline. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.
 
-The current implementation provides a strong foundation for further development of the memory system, with the core components now demonstrated in practical applications. The next steps will focus on optimizing memory retrieval, implementing more sophisticated memory management strategies, and integrating the memory system more deeply with the Discord and Instagram clients.
+The current implementation provides a strong foundation for further development of the memory system, with the core components now demonstrated in practical applications. The next steps will focus on integrating MCP servers for enhanced tool capabilities, optimizing memory retrieval, implementing more sophisticated memory management strategies, and integrating the memory system more deeply with the Discord and Instagram clients.

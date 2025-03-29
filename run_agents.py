@@ -30,6 +30,9 @@ from src.carrier.tools import GET_WEATHER, generate_image
 # Configure logging
 logger = configure_logging()
 
+# Set httpx logging level to WARNING to suppress INFO level logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 async def load_character_file(file_path: str) -> Dict[str, Any]:
     """Load and parse the character file"""
     if not os.path.exists(file_path):

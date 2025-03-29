@@ -1,12 +1,12 @@
 # Project Brief: Carrier
 
 ## Overview
-Carrier is a Python-based framework for creating autonomous AI Agents that can perform tasks and accomplish goals independently. The project focuses on developing a runtime loop system inspired by the ElizaOS architecture, but implemented in Python rather than Node.js.
+Carrier is a Python-based framework, built upon the OpenAI Agent SDK, for creating autonomous AI Agents that can perform tasks and accomplish goals independently. The project focuses on developing a runtime loop system inspired by the ElizaOS architecture, but implemented in Python rather than Node.js, leveraging the foundation provided by the OpenAI SDK.
 
 ## Project Scope
 Carrier aims to provide a robust framework for AI Agents with the following capabilities:
 - Individual agent personalities and characteristics
-- Tool integration for performing various tasks
+- Tool integration for performing various tasks, including support for the Model Context Protocol (MCP)
 - Memory systems for context retention
 - Runtime loop for processing and responding to messages
 - Client integrations for receiving input from different sources
@@ -23,7 +23,7 @@ Carrier aims to provide a robust framework for AI Agents with the following capa
 
 3. Tool Integration
    - Agents can access and use tools to accomplish tasks
-   - Extensible tool system for adding new capabilities
+   - Extensible tool system for adding new capabilities, including integration with MCP servers via the OpenAI Agent SDK
 
 4. Memory Management
    - Storage of interactions for future context
@@ -155,7 +155,7 @@ This uses the appropriate provider (OpenAI, Anthropic, etc.) based on the agent'
 
 #### 5. Action Execution
 
-If the LLM's response includes an action, it's processed:
+If the LLM's response includes an action (which could be a locally defined tool or a tool provided by an MCP server), it's processed:
 
 ```python
 async def process_callback(new_messages):

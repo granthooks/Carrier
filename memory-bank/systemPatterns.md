@@ -11,16 +11,18 @@ graph TD
     A --> E[Evaluation System]
     A --> F[Memory System]
     A --> G[Provider System]
-    
+    A --> J[MCP Servers]
+
     B --> F
     C --> F
     D --> G
+    D --> J
     E --> G
     
     H1[Discord Client] --> A
     H2[Instagram Client] --> A
     H3[Other Clients] -.-> A
-    A --> I[External Tools]
+    A --> I[Local Tools]
     
     F --> F1[Message Manager]
     F --> F2[Description Manager]
@@ -58,6 +60,7 @@ The architecture implements a processing pipeline that takes user inputs from va
    - Supabase with PostgreSQL and vector extensions for memory storage
    - OpenAI embeddings for semantic representation of text
    - Vector similarity search for retrieving relevant memories
+   - Integration with OpenAI Agent SDK for core agent functionality and MCP support
 
 ## Design Patterns
 
@@ -178,7 +181,45 @@ class MessageManager(BaseMemoryManager):
         # Get recent conversation messages
 ```
 
-### 8. Hook Pattern
+### 7. MCP Integration Pattern
+Leverages the OpenAI Agent SDK to connect to and interact with MCP servers:
+- **Connection**: Uses `MCPServerStdio` for local subprocess servers or `MCPServerSse` for remote HTTP/SSE servers.
+- **Tool Discovery**: The Agent Runtime calls `list_tools()` on connected MCP servers (potentially cached) to make tools available to the LLM.
+- **Tool Execution**: When the LLM decides to use an MCP tool, the Agent Runtime calls `call_tool()` on the corresponding MCP server via the SDK.
+
+```python
+# Example using MCPServerStdio from OpenAI Agent SDK
+from agents.mcp import MCPServerStdio
+
+async with MCPServerStdio(
+    params={
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
+    },
+    cache_tools_list=True # Optional caching
+) as server:
+    # Agent can now list and call tools from this server
+    tools = await server.list_tools()
+    # ... agent uses server.call_tool(name="tool_name", arguments={...})
+```
+
+### 8. Manager Pattern
+Used for specialized memory managers:
+
+```python
+class BaseMemoryManager:
+    def __init__(self, memory_system: MemorySystem):
+        self.memory_system = memory_system
+
+class MessageManager(BaseMemoryManager):
+    async def create_memory(self, message: Dict[str, Any]) -> str:
+        # Create a new message memory
+        
+    async def get_conversation(self, user_id: str, room_id: str, agent_id: str, limit: int = 20):
+        # Get recent conversation messages
+```
+
+### 9. Hook Pattern
 Used for integrating memory with agent runtime:
 
 ```python
@@ -218,9 +259,10 @@ Manages the agent's state:
 - Tracks client-specific context
 
 ### Action Manager
-Handles the execution of actions:
+Handles the execution of actions, including both locally defined tools and tools provided by connected MCP servers:
 - Validates action requests
-- Executes actions using appropriate tools
+- Executes local actions directly
+- Delegates MCP tool calls to the appropriate MCP server via the OpenAI Agent SDK
 - Returns results to the runtime
 - Supports client-specific actions
 
@@ -287,6 +329,7 @@ sequenceDiagram
     participant ActionManager
     participant Evaluator
     participant MemorySystem
+    participant MCPServers
     
     Discord->>DiscordClient: Message Event
     DiscordClient->>DiscordClient: Detect Mention
@@ -297,9 +340,11 @@ sequenceDiagram
     StateManager->>MemorySystem: Retrieve Context
     StateManager->>Runtime: Return State
     Runtime->>LLMProvider: Generate Response
-    LLMProvider->>Runtime: Return Response
-    Runtime->>ActionManager: Execute Actions (if any)
-    ActionManager->>Runtime: Return Action Results
+    LLMProvider->>Runtime: Return Response (may include local tool or MCP tool call)
+    Runtime->>ActionManager: Execute Actions/Tools
+    ActionManager-->>MCPServers: Call MCP Tool (if applicable)
+    MCPServers-->>ActionManager: Return MCP Tool Result
+    ActionManager->>Runtime: Return Action/Tool Results
     Runtime->>Evaluator: Evaluate Response
     Evaluator->>Runtime: Return Evaluation
     Runtime->>MemorySystem: Store Response

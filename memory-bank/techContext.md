@@ -13,6 +13,7 @@
 - **SQLAlchemy**: ORM for database interactions
 - **asyncio**: Asynchronous I/O operations
 - **uvicorn**: ASGI server for running the FastAPI application
+- **openai-agents**: Core SDK for agent functionality and MCP support
 - **aiohttp**: Async HTTP client for external API calls
 - **discord.py**: Discord bot client library
 - **ftplib**: FTP client for file uploads
@@ -57,6 +58,31 @@
    cp .env.example .env
    # Edit with API keys and database connection
    ```
+
+6. **MCP Setup** (Using OpenAI Agent SDK):
+   - MCP Servers are configured and managed via the `openai-agents` SDK.
+   - **Stdio Servers**: Configured with `command` and `args` within the SDK's `MCPServerStdio` class.
+     ```python
+     # Example within agent setup code
+     from agents.mcp import MCPServerStdio
+     
+     mcp_filesystem_server = MCPServerStdio(
+         params={
+             "command": "npx", # Or node, python, etc.
+             "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
+         }
+     )
+     # Pass server instance to Agent constructor
+     ```
+   - **SSE Servers**: Configured with a `url` within the SDK's `MCPServerSse` class.
+     ```python
+     # Example within agent setup code
+     from agents.mcp import MCPServerSse
+     
+     mcp_remote_server = MCPServerSse(url="http://remote-mcp-server.com/sse")
+     # Pass server instance to Agent constructor
+     ```
+   - Specific MCP server dependencies (e.g., Node.js for `@modelcontextprotocol/server-filesystem`) might need separate installation.
 
 4. **Client API Setup**:
    ```bash
@@ -155,6 +181,7 @@ black src/ tests/
 
 ### Core Dependencies
 ```
+openai-agents>=[SPECIFY_VERSION] # Add the OpenAI Agent SDK
 fastapi>=0.95.0
 pydantic>=2.0.0
 sqlalchemy>=2.0.0
@@ -298,8 +325,9 @@ python -m build --wheel
 - **Discord API**: For bot integration and message handling
 - **Instagram Graph API**: For media posting and status checking
 - **Vector Database**: For efficient semantic search
-- **External Tool APIs**: Services agents can use
+- **External Tool APIs**: Services agents can use (potentially via MCP)
 - **OpenAI Embeddings API**: For vector representation of text
+- **MCP Servers**: Standardized way to provide tools and context (e.g., filesystem, git, web search) via stdio or SSE.
 
 ### Client Integrations
 - **Discord Client**: Integration with Discord servers and channels
