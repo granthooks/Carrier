@@ -1,0 +1,65 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "name": "Filesystem",
+      "type": "stdio",
+      "command": "node",
+      "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", "c:/gkh/documents/Projects/Carrier/mcp_workspace"],
+      "env": {}
+    },
+    "brave-search": {
+      "name": "Brave Search",
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-brave-search"],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_BRAVE_API_KEY_HERE"
+      },
+      "cache_tools_list": true
+    },
+    "github": {
+       "name": "GitHub",
+       "type": "stdio",
+       "command": "node",
+       "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/@modelcontextprotocol/server-github/dist/index.js"],
+       "env": {
+         "GITHUB_TOKEN": "YOUR_GITHUB_TOKEN_HERE"
+       },
+       "cache_tools_list": true
+    },
+    "supabase": {
+        "name": "Supabase",
+        "type": "stdio",
+        "command": "C:/Users/grant/.local/bin/supabase-mcp-server.exe",
+        "args": [],
+        "env": {},
+        "cache_tools_list": true
+    },
+    "puppeteer": {
+        "name": "Puppeteer",
+        "type": "stdio",
+        "command": "node",
+        "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/@modelcontextprotocol/server-puppeteer/dist/index.js"],
+        "env": {},
+        "cache_tools_list": true
+    },
+    "tavily": {
+        "name": "Tavily Search",
+        "type": "stdio",
+        "command": "node",
+        "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/tavily-mcp/build/index.js"],
+        "env": {
+            "TAVILY_API_KEY": "YOUR_TAVILY_API_KEY_HERE"
+        },
+        "cache_tools_list": true
+    },
+    "sequential-thinking": {
+        "name": "Sequential Thinking",
+        "type": "stdio",
+        "command": "node",
+        "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"],
+        "env": {},
+        "cache_tools_list": true
+    }
+  }
+}

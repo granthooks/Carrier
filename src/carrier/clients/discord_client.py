@@ -39,7 +39,7 @@ class DiscordHooks(RunHooks):
 
     async def on_tool_end(self, context: RunContextWrapper, agent: Agent, tool: Any, result: str) -> None:
         """Called when a tool execution completes"""
-        logger.info(f"[{self.client}] Tool {tool.name} completed with result: {result}")
+        logger.info(f"[{self.client}] Tool {tool.name} completed.")
 
     async def on_agent_end(self, context: RunContextWrapper, agent: Agent, output: Any) -> None:
         """Called when agent processing completes"""

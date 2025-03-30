@@ -40,144 +40,161 @@
 * Memory caching for frequently accessed embeddings
 * Database schema for memory storage with vector extensions
 * Vector similarity search functions for semantic retrieval
+* **MCP Integration (Initial Implementation Complete):**
+    * Central MCP server configuration (`config/mcp_servers.json`) created.
+    * Character files updated to reference MCP server names.
+    * `run_agents.py` refactored for centralized MCP server management, config loading, logging, and tool fetching.
+    * `initialize_agent` updated to handle MCP servers and tools.
+    * `build_system_prompt` updated to include all available tools.
+    * `list_available_tools` tool added for agent introspection.
+    * `CarrierAgent` class updated to store combined tool descriptions.
+    * Initial MCP integration test (`tests/test_mcp_integration.py`) created for filesystem server.
 
 ## What's Left to Build
-* Memory system optimizations:
-  * Improved performance for large memory stores
-  * Enhanced caching strategies
-  * Memory persistence across agent restarts
-  * Memory pruning and summarization
-  * Relationship tracking between users and agents
-  * Sentiment analysis for relationship quality
-  * Memory visualization tools
-  * Memory export/import functionality
-  * Memory privacy controls and access management
-  * Memory retention policies and automatic cleanup
-  * Memory analytics for usage patterns
-* Discord client integration improvements:
-  * Enhance Discord event handling for edge cases
-  * Implement error recovery and reconnection logic
-* Instagram client integration improvements:
-  * Enhance media posting capabilities
-  * Improve error handling and recovery
-  * Add support for different media types
-  * Optimize FTP upload process
-  * Implement better handling of API rate limits
-* Implementation of the Agent Runtime class
-* Message Manager component for processing incoming messages
-* State Manager for context composition
-* Action Manager for tool execution
-* Provider System for LLM integration
-* Additional client interfaces for interacting with agents
-* Tool integrations for agent capabilities
-* Testing framework for agent behavior validation
-* MCP Server Integration:
-    * Connection logic for specific MCP servers
-    * Integration of MCP tool listing/calling into runtime
-    * Testing MCP tool execution
+* **MCP Integration Refinement:**
+    * Thorough testing with various MCP servers (Brave, GitHub, Supabase, etc.).
+    * Robust error handling for MCP server startup and tool calls.
+    * Verification of API key loading from `.env`.
+    * Testing `list_available_tools` functionality in practice.
+    * Evaluation of `cache_tools_list` settings.
+* **Memory System Optimizations (Ongoing):**
+    * Improved performance for large memory stores
+    * Enhanced caching strategies
+    * Memory persistence across agent restarts
+    * Memory pruning and summarization
+    * Relationship tracking between users and agents
+    * Sentiment analysis for relationship quality
+    * Memory visualization tools
+    * Memory export/import functionality
+    * Memory privacy controls and access management
+    * Memory retention policies and automatic cleanup
+    * Memory analytics for usage patterns
+* **Client Integration Improvements:**
+    * Enhance Discord event handling, error recovery, reconnection.
+    * Enhance Instagram media posting, error handling, rate limit handling.
+* **Core Component Implementation (Ongoing):**
+    * Implementation of the Agent Runtime class (partially covered by Runner)
+    * Message Manager component (partially covered by clients/hooks)
+    * State Manager for context composition (partially covered by memory hooks)
+    * Action Manager for tool execution (partially covered by Runner/SDK)
+    * Provider System for LLM integration (partially covered by Agent class)
+* **Other:**
+    * Additional client interfaces for interacting with agents
+    * Additional built-in tool integrations
+    * Comprehensive testing framework for agent behavior validation
+    * API layer implementation (FastAPI)
 
 ## Current Status
 * Planning phase complete
 * Architecture design complete
-* Initial implementation phase in progress
-* Core patterns and components defined and partially implemented
-* Technical decisions documented and applied
-* Discord integration implemented and fully functional
-* Instagram integration implemented and ready for testing
-* Multi-client architecture established and working
-* CLI agent implementation complete and working
-* Instagram CLI testing tool implemented
-* Memory system core implementation complete
-* Memory managers implemented for different memory types
-* Memory hooks integrated with agent runtime
-* Memory CLI tool implemented for management
-* Memory integration tests implemented and passing
-* Vector search capabilities implemented for semantic retrieval
-* RAG knowledge manager implemented for retrieval-augmented generation
-* MCP integration planning initiated based on OpenAI Agent SDK
+* Initial implementation phase largely complete for core loop, clients, memory, and MCP.
+* Core patterns and components defined and implemented.
+* Technical decisions documented and applied.
+* Discord integration implemented and functional.
+* Instagram integration implemented and functional.
+* Multi-client architecture established and working.
+* CLI agent implementation complete and working.
+* Instagram CLI testing tool implemented.
+* Memory system core implementation complete.
+* Memory managers implemented for different memory types.
+* Memory hooks integrated with agent runtime.
+* Memory CLI tool implemented for management.
+* Memory integration tests implemented and passing.
+* Vector search capabilities implemented for semantic retrieval.
+* RAG knowledge manager implemented for retrieval-augmented generation.
+* **MCP integration initial implementation complete.**
 
 ## Known Issues
-* Memory retrieval system needs optimization for very large memory stores
-* Caching strategies need refinement for better performance
-* Vector database integration needs performance tuning
-* Testing LLM-based systems will require more deterministic approaches
-* Security considerations for tool usage need further development
-* Discord rate limits need to be managed for high-traffic channels
-* Instagram publishing limits need to be managed for media posting
-* Error handling and recovery needs improvement
-* Long-running client connections require reconnection strategies
-* FTP upload process needs optimization and error handling
-* Instagram API error handling needs improvement
-* Agent memory persistence across restarts not yet implemented
-* Logging infrastructure needs enhancement for production use
-* Memory privacy and access controls not yet implemented
-* Memory backup and recovery procedures not yet established
-* Memory migration and versioning not yet addressed
-* Memory retention policies not yet implemented
-* Memory analytics not yet developed
+* Memory retrieval system needs optimization for very large memory stores.
+* Caching strategies need refinement for better performance.
+* Vector database integration needs performance tuning.
+* Testing LLM-based systems requires more deterministic approaches.
+* Security considerations for tool usage need further development (esp. MCP env vars).
+* Discord rate limits need to be managed for high-traffic channels.
+* Instagram publishing limits need to be managed for media posting.
+* Error handling and recovery needs improvement across clients and MCP management.
+* Long-running client connections require reconnection strategies.
+* FTP upload process needs optimization and error handling.
+* Instagram API error handling needs improvement.
+* Agent memory persistence across restarts not yet implemented.
+* Logging infrastructure needs enhancement for production use (though improved for MCP).
+* Memory privacy and access controls not yet implemented.
+* Memory backup and recovery procedures not yet established.
+* Memory migration and versioning not yet addressed.
+* Memory retention policies not yet implemented.
+* Memory analytics not yet developed.
+* MCP server startup errors might prevent agent initialization - needs robust handling.
+* API Keys for MCP servers need secure handling (currently relies on `.env`).
 
 ## Milestones
 * [✓] Memory bank initialization (March 13, 2025)
 * [✓] Project scope definition (March 13, 2025)
 * [✓] Technical stack selection (March 13, 2025)
 * [✓] Architecture design (March 13, 2025)
-* [✓] Development environment setup (March 13, 2025, using Anaconda "carrier" environment with Python 3.9)
+* [✓] Development environment setup (March 13, 2025)
 * [✓] Discord integration design (March 13, 2025)
 * [✓] Basic Agent runtime loop implementation (March 14, 2025)
 * [✓] CLI agent implementation (March 14, 2025)
 * [✓] Client interfaces:
-  * [✓] Discord client implementation (March 14, 2025)
-  * [✓] Discord client parameter fixes and improvements (March 27, 2025)
-  * [✓] Instagram client implementation (March 15-17, 2025)
-  * [ ] Other client interfaces
+    * [✓] Discord client implementation (March 14, 2025)
+    * [✓] Discord client parameter fixes and improvements (March 27, 2025)
+    * [✓] Instagram client implementation (March 15-17, 2025)
+    * [ ] Other client interfaces
 * [✓] Memory system implementation:
-  * [✓] Core MemorySystem class (March 18, 2025)
-  * [✓] Specialized memory managers (March 18, 2025)
-  * [✓] Memory hooks integration (March 19, 2025)
-  * [✓] Memory CLI tool (March 19, 2025)
-  * [✓] Vector search capabilities (March 20, 2025)
-  * [✓] RAG knowledge manager (March 20, 2025)
-  * [ ] Memory optimization and scaling
-* [ ] Core component implementation:
-  * [ ] Agent Runtime
-  * [ ] Message Manager
-  * [ ] State Manager
-  * [ ] Action Manager
-  * [ ] Provider System
+    * [✓] Core MemorySystem class (March 18, 2025)
+    * [✓] Specialized memory managers (March 18, 2025)
+    * [✓] Memory hooks integration (March 19, 2025)
+    * [✓] Memory CLI tool (March 19, 2025)
+    * [✓] Vector search capabilities (March 20, 2025)
+    * [✓] RAG knowledge manager (March 20, 2025)
+    * [ ] Memory optimization and scaling
+* [✓] MCP Server Integration (Initial):
+    * [✓] Central configuration (`config/mcp_servers.json`) (March 28, 2025)
+    * [✓] Character file schema update (March 28, 2025)
+    * [✓] `run_agents.py` refactoring for MCP management (March 28, 2025)
+    * [✓] `initialize_agent` update for MCP tools (March 28, 2025)
+    * [✓] `build_system_prompt` update (March 28, 2025)
+    * [✓] `list_available_tools` tool added (March 28, 2025)
+    * [✓] `CarrierAgent` update (March 28, 2025)
+    * [✓] Initial test script (`tests/test_mcp_integration.py`) (March 28, 2025)
+* [ ] Core component implementation (Refinement):
+    * [ ] Agent Runtime (Refine based on Runner)
+    * [ ] Message Manager (Refine)
+    * [ ] State Manager (Refine)
+    * [ ] Action Manager (Refine)
+    * [ ] Provider System (Refine)
 * [ ] API layer implementation
-* [ ] Tool integration framework
-* [ ] MCP Server Integration
-* [ ] Testing and validation
+* [ ] Tool integration framework (Refinement)
+* [ ] Testing and validation (Comprehensive)
 * [ ] Initial release
 
 ## Next Tasks
-1. **MCP Integration:**
-    * Implement connection logic for specific MCP servers (e.g., filesystem).
-    * Integrate MCP tool listing and calling into Agent Runtime/Action Manager.
-    * Test MCP tool execution flow.
-    * Explore MCP server caching.
-2. **Memory System Optimizations:**
-    * Optimize memory retrieval performance.
-    * Implement improved caching strategies.
-    * Add memory persistence across restarts.
-    * Enhance vector search.
-    * Implement memory pruning/summarization.
-    * Add relationship tracking & sentiment analysis.
-    * Create memory visualization tools.
-    * Integrate memory system with clients.
-    * Implement memory-aware response generation.
-    * Add memory export/import.
-    * Develop privacy controls.
-    * Implement retention policies.
-    * Create memory analytics.
-3. **Client Enhancements:**
-    * Enhance Instagram client error handling.
+1.  **MCP Integration Refinement:**
+    *   Run `tests/test_mcp_integration.py`.
+    *   Add tests for other MCP servers (e.g., brave-search, requiring API key setup in `.env`).
+    *   Manually test agents using MCP tools via clients (e.g., Discord).
+    *   Test `list_available_tools` output.
+    *   Refine error handling in `run_agents.py` for server startup/tool listing failures.
+2.  **Memory System Optimizations (Ongoing):**
+    *   Optimize memory retrieval performance.
+    *   Implement improved caching strategies.
+    *   Add memory persistence across restarts.
+    *   Enhance vector search.
+    *   Implement memory pruning/summarization.
+    *   Add relationship tracking & sentiment analysis.
+    *   Create memory visualization tools.
+    *   Integrate memory system with clients.
+    *   Implement memory-aware response generation.
+    *   Add memory export/import.
+    *   Develop privacy controls.
+    *   Implement retention policies.
+    *   Create memory analytics.
+3.  **Client Enhancements:**
+    *   Enhance Instagram client error handling.
 
 ## Notes
-The project has made significant progress with the implementation of the memory system, which provides a foundation for context-aware agent interactions. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.
+The project has made significant progress with the implementation of the memory system and the initial integration of MCP servers. This provides a foundation for agents with context-aware interactions and access to a wider range of external tools via the standardized Model Context Protocol.
 
-The specialized memory managers (MessageManager, DescriptionManager, LoreManager, DocumentsManager, KnowledgeManager, RAGKnowledgeManager) provide tailored interfaces for different memory types, making it easier to work with specific kinds of memories. The memory hooks integrate conversation history with agent context, enabling more contextual responses.
+The MCP integration uses a centralized configuration file (`config/mcp_servers.json`) and manages server lifecycles efficiently in `run_agents.py`. Agents can now list their available tools, including those provided by MCP servers. An initial test verifies the filesystem server integration.
 
-The memory CLI tool provides a convenient interface for managing memories, allowing developers to list, clear, and test similarity search. The integration tests verify that the memory system works correctly with the agent runtime, ensuring that conversation history is properly used for context-aware responses.
-
-The next phase will focus on optimizing the memory system for better performance, implementing more sophisticated memory management strategies, and integrating the memory system more deeply with the Discord and Instagram clients. This will enable more intelligent and context-aware agent interactions across different platforms.
+The next phase involves thorough testing and refinement of the MCP integration across various servers, ensuring robustness and proper handling of API keys and potential errors. Continued development of the memory system remains a parallel priority.

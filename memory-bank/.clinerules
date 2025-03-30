@@ -22,13 +22,13 @@ The Carrier framework uses a hooks pattern to implement the runtime loop stages:
 class DiscordHooks(RunHooks):
     async def on_agent_start(self, context, agent) -> None:
         # Step 3: Message Processing pipeline begins
-        
+
     async def on_tool_start(self, context, agent, tool) -> None:
         # Step 5: Action Execution begins
-        
+
     async def on_tool_end(self, context, agent, tool, result) -> None:
         # Step 5: Action Execution completes
-        
+
     async def on_agent_end(self, context, agent, output) -> None:
         # Step 6: Evaluation and Step 7: Memory Storage complete
 ```
@@ -63,18 +63,18 @@ The memory system follows a layered architecture:
 class MemorySystem:
     async def store_memory(self, content, memory_type, user_id, room_id, agent_id, metadata=None):
         # Generate embedding and store in database
-        
+
     async def retrieve_similar(self, query, threshold=0.7, limit=10, memory_type=None):
         # Perform vector similarity search
-        
+
 # Specialized memory manager for messages
 class MessageManager:
     async def create_memory(self, message):
         # Create a message memory
-        
+
     async def get_conversation(self, user_id, room_id, agent_id, limit=20):
         # Get conversation history
-        
+
 # Memory hooks for runtime integration
 class MemoryContextHooks:
     async def on_agent_start(self, context, agent):
@@ -123,6 +123,14 @@ Specialized memory managers for different memory types:
 - **RAGKnowledgeManager**: Retrieval-augmented generation
 
 Each manager extends BaseMemoryManager and provides specialized methods for its memory type.
+
+### MCP Integration Pattern (New)
+- **Central Configuration**: `config/mcp_servers.json` defines all servers (stdio/sse) with parameters. Keys are unique server names.
+- **Character Configuration**: `characters/*.json` lists required server *names* under `mcp_servers`.
+- **Centralized Management**: `run_agents.py` identifies unique required servers, starts them concurrently using `AsyncExitStack`, manages lifecycles, and maps active instances by name.
+- **Environment Variables**: API keys/secrets for MCP servers are loaded from `.env` in `run_agents.py` and injected into the server's environment during startup.
+- **Agent Initialization**: `initialize_agent` receives active server instances, fetches MCP tools via `server.list_tools()`, combines with built-in tools for the system prompt, and passes active servers + built-in tools to the `Agent` constructor.
+- **Tool Introspection**: `list_available_tools` built-in tool allows agents to list all their tools (built-in + MCP).
 
 ## User Preferences
 
@@ -195,6 +203,7 @@ Each manager extends BaseMemoryManager and provides specialized methods for its 
 3. Create validation framework
 4. Add handler execution
 5. Build tool discovery mechanism
+6. Implement `list_available_tools` tool.
 
 ### Client Integration Implementation
 1. Build FastAPI endpoints
@@ -203,6 +212,16 @@ Each manager extends BaseMemoryManager and provides specialized methods for its 
 4. Set up authentication
 5. Implement multi-client support in run_agent.py
 6. Create client-specific hooks for each client type
+
+### MCP Integration Implementation (New)
+1. Create `config/mcp_servers.json` with server definitions.
+2. Update character files (`characters/*.json`) to list required server names.
+3. Refactor `run_agents.py` for centralized server management using `AsyncExitStack`.
+4. Update `initialize_agent` to fetch MCP tools and configure `Agent`.
+5. Update `build_system_prompt` to include MCP tools.
+6. Add `list_available_tools` to `src/carrier/tools.py`.
+7. Update `CarrierAgent` class.
+8. Create `tests/test_mcp_integration.py`.
 
 ## Known Challenges
 
@@ -274,6 +293,7 @@ Tools executed by agents need security boundaries:
 - Permissions model for tool access
 - Auditing of tool usage
 - Client-specific tool access controls
+- **MCP Server Security**: Ensure API keys/tokens needed by MCP servers are loaded securely from environment variables (`.env`) and passed via the `env` parameter during server startup in `run_agents.py`, not stored directly in `config/mcp_servers.json`.
 
 ### Testing LLM-Based Systems
 Testing deterministically with non-deterministic LLMs:
@@ -289,6 +309,13 @@ Managing async database operations efficiently:
 - Vector search optimization
 - Concurrent database operations
 
+### MCP Integration Challenges (New)
+- Robust error handling for MCP server startup failures in `run_agents.py`.
+- Handling errors during `server.list_tools()` calls.
+- Ensuring compatibility with various MCP server implementations and versions.
+- Managing resource consumption of multiple concurrent MCP server processes.
+- Verifying secure handling of environment variables passed to servers.
+
 ## Tool Usage
 
 ### Memory Bank
@@ -298,11 +325,14 @@ Managing async database operations efficiently:
 - Regular updates reflecting implementation progress
 
 ### Character Files
-- Character definitions stored in JSON format in characters/
-- Contains system prompt, bio, lore, communication style
-- Used to generate comprehensive agent instructions
-- Example: assistantbot.json for Discord and Instagram agent
-- Client-specific context added to system prompt during initialization
+- Character definitions stored in JSON format in `characters/`.
+- Contains system prompt, bio, lore, communication style, built-in `tools` (list of names), and required `mcp_servers` (list of names).
+- Used to generate comprehensive agent instructions.
+- Example: `assistantbot.json`.
+
+### MCP Configuration
+- Central configuration stored in `config/mcp_servers.json`.
+- Defines connection details (`command`, `args`, `env`, `url`, etc.) for each named MCP server.
 
 ### Memory System Tools
 - Supabase for database backend
@@ -313,7 +343,13 @@ Managing async database operations efficiently:
   - Clearing memories with confirmation
   - Testing similarity search
   - Initializing database schema
-- Integration tests for verifying functionality
+- Integration tests for verifying functionality (`tests/test_memory.py`).
+
+### MCP Integration Tools
+- OpenAI Agent SDK classes: `MCPServerStdio`, `MCPServerSse`.
+- `contextlib.AsyncExitStack` for managing server lifecycles in `run_agents.py`.
+- `list_available_tools` built-in tool for introspection.
+- Integration tests (`tests/test_mcp_integration.py`).
 
 ### Python Development Tools
 - Anaconda environment named "carrier" with Python 3.9
@@ -379,6 +415,13 @@ Managing async database operations efficiently:
 - Schema design with vector indices for similarity search
 - Memory partitioning by type, agent, user, and room
 
+### MCP Integration Decisions (New)
+- Centralized server configuration in `config/mcp_servers.json`.
+- Character files specify required servers by name.
+- Centralized server lifecycle management in `run_agents.py` using `AsyncExitStack`.
+- API keys loaded from `.env` and injected into server environment.
+- `list_available_tools` added for introspection.
+
 ## Notes
 The Carrier project takes strong inspiration from ElizaOS but adapts its patterns to leverage Python's strengths. The core runtime loop remains the same conceptually, but the implementation details differ to align with Python's ecosystem and paradigms.
 
@@ -388,4 +431,12 @@ The multi-client architecture demonstrates the flexibility of the framework, all
 
 The memory system extends the framework's capabilities by providing persistent storage and retrieval of interactions, enabling context-aware responses across multiple conversations and platforms. The vector-based approach allows for semantic search, retrieving memories based on content similarity rather than just exact matches or timestamps.
 
-Future development will focus on enhancing the memory system, improving tool integration, refining the agent runtime components for more sophisticated processing and response generation, and expanding the multi-client architecture to support additional platforms and interaction types.
+The MCP integration adds the ability to leverage external tools defined in a central configuration, managed efficiently during runtime.
+
+Future development will focus on enhancing the memory system, refining the MCP integration (testing, error handling), improving tool integration, refining the agent runtime components for more sophisticated processing and response generation, and expanding the multi-client architecture to support additional platforms and interaction types.
+
+## Additional notes from me
+/src/agents is for the public repository OpenAI Agent SDK files. Custom code for this Carrier project should go in /src/carrier. So DO NOT modify any files under /src/agents since they will be overwritten when the Agent SDK code is pulled for updates.
+Do not edit the .env file directly. Always prompt me to do so manually.
+Always use your MCP tools if appropriate.
+Refer to the OpenAI Agent SDK documentation when implementing new functionality: https://openai.github.io/openai-agents-python/

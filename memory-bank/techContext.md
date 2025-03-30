@@ -57,34 +57,19 @@
    # Create .env file for API keys
    cp .env.example .env
    # Edit with API keys and database connection
-   ```
+    ```
 
-6. **MCP Setup** (Using OpenAI Agent SDK):
-   - MCP Servers are configured and managed via the `openai-agents` SDK.
-   - **Stdio Servers**: Configured with `command` and `args` within the SDK's `MCPServerStdio` class.
-     ```python
-     # Example within agent setup code
-     from agents.mcp import MCPServerStdio
-     
-     mcp_filesystem_server = MCPServerStdio(
-         params={
-             "command": "npx", # Or node, python, etc.
-             "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
-         }
-     )
-     # Pass server instance to Agent constructor
-     ```
-   - **SSE Servers**: Configured with a `url` within the SDK's `MCPServerSse` class.
-     ```python
-     # Example within agent setup code
-     from agents.mcp import MCPServerSse
-     
-     mcp_remote_server = MCPServerSse(url="http://remote-mcp-server.com/sse")
-     # Pass server instance to Agent constructor
-     ```
-   - Specific MCP server dependencies (e.g., Node.js for `@modelcontextprotocol/server-filesystem`) might need separate installation.
+ 6. **MCP Setup** (Using OpenAI Agent SDK):
+   - **Central Configuration**: All available MCP servers (stdio or sse) are defined in `config/mcp_servers.json`. This file specifies the server's unique name (key), type, command/args/env (for stdio), url/headers (for sse), and optional caching settings.
+   - **Character Configuration**: Individual character files (`characters/*.json`) list the *names* of the MCP servers required by that agent under the `mcp_servers` key (e.g., `["filesystem", "brave-search"]`).
+   - **Runtime Management (`run_agents.py`)**:
+     - Loads `config/mcp_servers.json`.
+     - Identifies the unique set of servers needed by all agents being run.
+     - Uses `contextlib.AsyncExitStack` to start and manage the lifecycle of these unique servers (`MCPServerStdio` / `MCPServerSse`), injecting necessary environment variables (like API keys loaded from `.env`) into the server's `env` configuration.
+     - Passes the *active* server instances to the `Agent` constructor during initialization based on the agent's character file configuration.
+   - **Dependencies**: Requires the necessary MCP server executables (e.g., Node.js packages, Python scripts, binaries) to be installed and accessible via the paths specified in `config/mcp_servers.json`.
 
-4. **Client API Setup**:
+ 4. **Client API Setup**:
    ```bash
    # Discord API setup
    # Create a Discord application at https://discord.com/developers/applications
@@ -327,9 +312,9 @@ python -m build --wheel
 - **Vector Database**: For efficient semantic search
 - **External Tool APIs**: Services agents can use (potentially via MCP)
 - **OpenAI Embeddings API**: For vector representation of text
-- **MCP Servers**: Standardized way to provide tools and context (e.g., filesystem, git, web search) via stdio or SSE.
+ - **MCP Servers**: Standardized way to provide tools and context (e.g., filesystem, git, web search) via stdio or SSE, configured in `config/mcp_servers.json` and managed by `run_agents.py`.
 
-### Client Integrations
+ ### Client Integrations
 - **Discord Client**: Integration with Discord servers and channels
   - Message event handling
   - Mention detection

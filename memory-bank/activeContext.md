@@ -1,9 +1,11 @@
 # Active Context: Carrier
 
 ## Current Focus
-* Integrating MCP (Model Context Protocol) servers using the OpenAI Agent SDK for standardized tool access.
-* Implementing a robust memory system for Carrier agents.
-* Developing Supabase integration with PostgreSQL and vector extensions for memory storage.
+* Testing and refining the newly implemented MCP (Model Context Protocol) server integration.
+* Enhancing error handling and logging for MCP server management.
+* Implementing and testing integration with additional MCP servers (beyond filesystem).
+* Implementing a robust memory system for Carrier agents (ongoing).
+* Developing Supabase integration with PostgreSQL and vector extensions for memory storage (ongoing).
 * Creating specialized memory managers for different memory types.
 * Integrating memory system with agent runtime through hooks.
 * Implementing CLI tools for memory management.
@@ -37,15 +39,22 @@
 * March 27, 2025: Fixed Discord client parameter naming in Runner.run() method (using starting_agent instead of agent)
 * March 27, 2025: Improved Discord channel configuration by reading from character files instead of hardcoding
 * March 27, 2025: Enhanced run_agents.py to support multiple agents with different client configurations
-* March 28, 2025: Initiated integration of MCP servers using the OpenAI Agent SDK framework. Updated memory bank documentation to reflect this new focus.
+* March 28, 2025: Created central MCP server configuration (`config/mcp_servers.json`).
+* March 28, 2025: Refactored `run_agents.py` for centralized MCP server management using `AsyncExitStack`, loading configs, handling environment variables, and adding logging.
+* March 28, 2025: Updated `initialize_agent` to fetch and combine built-in and MCP tools.
+* March 28, 2025: Updated `build_system_prompt` to include all available tools.
+* March 28, 2025: Added `list_available_tools` tool for agent introspection.
+* March 28, 2025: Updated `CarrierAgent` to store combined tool descriptions.
+* March 28, 2025: Created `tests/test_mcp_integration.py` with an initial test for the filesystem server.
 
 ## Next Steps
-* **MCP Integration:**
-    * Implement connection logic for specific MCP servers (e.g., filesystem, web search).
-    * Integrate MCP tool listing and calling into the Agent Runtime and Action Manager.
-    * Test MCP tool execution flow.
-    * Explore MCP server caching mechanisms (`cache_tools_list`).
-* **Memory System:**
+* **MCP Integration Refinement:**
+    * Thoroughly test integration with various MCP servers defined in `config/mcp_servers.json` (Brave, GitHub, Supabase, etc.).
+    * Implement robust error handling for MCP server startup and tool calls within `run_agents.py`.
+    * Ensure API keys/tokens are correctly loaded from `.env` and passed to servers.
+    * Test the `list_available_tools` functionality.
+    * Evaluate and potentially adjust `cache_tools_list` settings per server.
+* **Memory System (Ongoing):**
     * Optimize memory retrieval for better performance with large memory stores.
     * Implement caching strategies for frequently accessed memories.
     * Add memory persistence across agent restarts.
@@ -105,16 +114,15 @@
 * Optimizing media file uploads for Instagram posting
 * Handling Instagram API publishing limits and quotas
 * Implementing robust error handling for Instagram media posting
-* **MCP Considerations:**
-    * Managing the lifecycle of stdio MCP servers (subprocess management).
-    * Handling potential errors from MCP servers during tool listing or execution.
-    * Ensuring compatibility with different MCP server implementations and versions.
-    * Deciding on caching strategies for MCP tool lists (`cache_tools_list`).
-    * Security implications of running external MCP server processes or connecting to remote ones.
+* **MCP Considerations (Post-Initial Implementation):**
+    * Monitoring the stability and resource usage of centrally managed MCP servers.
+    * Refining error handling for scenarios where specific servers fail to start or respond.
+    * Ensuring security when passing environment variables (like API keys) to server subprocesses.
+    * Verifying compatibility as MCP servers are updated.
 
 ## Notes
-The project has moved from client integration to memory system implementation, with the core memory components now in place. The MemorySystem class provides the foundation for memory storage and retrieval, while specialized memory managers offer tailored interfaces for different memory types. The memory hooks integrate conversation history with agent context, enabling more contextual responses.
+The project has successfully integrated the initial MCP server functionality using a centralized configuration (`config/mcp_servers.json`) and management approach within `run_agents.py`. Agents can now be configured to access tools from specified MCP servers, and the system handles starting/stopping these servers efficiently. A new `list_available_tools` tool allows agents to report their capabilities. The memory system implementation remains ongoing.
 
 The implementation follows the 7-step runtime loop outlined in the project brief, with memory storage and retrieval integrated at appropriate points in the processing pipeline. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.
 
-The current implementation provides a strong foundation for further development of the memory system, with the core components now demonstrated in practical applications. The next steps will focus on integrating MCP servers for enhanced tool capabilities, optimizing memory retrieval, implementing more sophisticated memory management strategies, and integrating the memory system more deeply with the Discord and Instagram clients.
+The current implementation provides a strong foundation for leveraging external tools via MCP. The next steps involve testing this integration thoroughly with various servers, refining error handling, and continuing the development of the memory system alongside the expanded tool capabilities.

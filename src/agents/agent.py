@@ -4,23 +4,54 @@ import dataclasses
 import inspect
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Callable, Generic, Optional, cast, List, Dict
+from typing import TYPE_CHECKING, Any, Callable, Generic, Literal, cast
 
-from . import _utils
-from ._utils import MaybeAwaitable
+from typing_extensions import TypeAlias, TypedDict
+
 from .guardrail import InputGuardrail, OutputGuardrail
 from .handoffs import Handoff
 from .items import ItemHelpers
 from .logger import logger
+from .mcp import MCPUtil
 from .model_settings import ModelSettings
 from .models.interface import Model
 from .run_context import RunContextWrapper, TContext
-from .tool import Tool, function_tool
+from .tool import FunctionToolResult, Tool, function_tool
+from .util import _transforms
+from .util._types import MaybeAwaitable
+import json
 
 if TYPE_CHECKING:
     from .lifecycle import AgentHooks
+    from .mcp import MCPServer
     from .result import RunResult
-    from .memory import MemorySystem, MessageManager, DescriptionManager, LoreManager, DocumentsManager, KnowledgeManager, RAGKnowledgeManager
+
+
+@dataclass
+class ToolsToFinalOutputResult:
+    is_final_output: bool
+    """Whether this is the final output. If False, the LLM will run again and receive the tool call
+    output.
+    """
+
+    final_output: Any | None = None
+    """The final output. Can be None if `is_final_output` is False, otherwise must match the
+    `output_type` of the agent.
+    """
+
+
+ToolsToFinalOutputFunction: TypeAlias = Callable[
+    [RunContextWrapper[TContext], list[FunctionToolResult]],
+    MaybeAwaitable[ToolsToFinalOutputResult],
+]
+"""A function that takes a run context and a list of tool results, and returns a
+`ToolToFinalOutputResult`.
+"""
+
+
+class StopAtTools(TypedDict):
+    stop_at_tool_names: list[str]
+    """A list of tool names, any of which will stop the agent from running further."""
 
 
 @dataclass
@@ -28,8 +59,8 @@ class Agent(Generic[TContext]):
     """An agent is an AI model configured with instructions, tools, guardrails, handoffs and more.
 
     We strongly recommend passing `instructions`, which is the "system prompt" for the agent. In
-    addition, you can pass `description`, which is a human-readable description of the agent, used
-    when the agent is used inside tools/handoffs.
+    addition, you can pass `handoff_description`, which is a human-readable description of the
+    agent, used when the agent is used inside tools/handoffs.
 
     Agents are generic on the context type. The context is a (mutable) object you create. It is
     passed to tool functions, handoffs, guardrails, etc.
@@ -79,6 +110,16 @@ class Agent(Generic[TContext]):
     tools: list[Tool] = field(default_factory=list)
     """A list of tools that the agent can use."""
 
+    mcp_servers: list[MCPServer] = field(default_factory=list)
+    """A list of [Model Context Protocol](https://modelcontextprotocol.io/) servers that
+    the agent can use. Every time the agent runs, it will include tools from these servers in the
+    list of available tools.
+
+    NOTE: You are expected to manage the lifecycle of these servers. Specifically, you must call
+    `server.connect()` before passing it to the agent, and `server.cleanup()` when the server is no
+    longer needed.
+    """
+
     input_guardrails: list[InputGuardrail[TContext]] = field(default_factory=list)
     """A list of checks that run in parallel to the agent's execution, before generating a
     response. Runs only if the agent is the first agent in the chain.
@@ -95,67 +136,30 @@ class Agent(Generic[TContext]):
     hooks: AgentHooks[TContext] | None = None
     """A class that receives callbacks on various lifecycle events for this agent.
     """
-    
-    # Memory system components
-    memory_system: Any = None
-    """The memory system for the agent to store and retrieve memories."""
-    
-    message_manager: Any = None
-    """Manager for conversation messages."""
-    
-    description_manager: Any = None
-    """Manager for user descriptions."""
-    
-    lore_manager: Any = None
-    """Manager for agent lore and background information."""
-    
-    documents_manager: Any = None
-    """Manager for large documents."""
-    
-    knowledge_manager: Any = None
-    """Manager for searchable knowledge fragments."""
-    
-    rag_knowledge_manager: Any = None
-    """Manager for RAG-based knowledge retrieval."""
 
-    def __post_init__(self):
-        """Initialize memory system components if needed."""
-        # Import here to avoid circular imports
-        try:
-            from .memory import MemorySystem, MessageManager, DescriptionManager, LoreManager
-            from .memory import DocumentsManager, KnowledgeManager, RAGKnowledgeManager
-            
-            if self.memory_system is None:
-                # Initialize with default configuration
-                self.memory_system = MemorySystem()
-                
-            if self.message_manager is None and self.memory_system is not None:
-                # Initialize message manager with memory system
-                self.message_manager = MessageManager(self.memory_system)
-                
-            if self.description_manager is None and self.memory_system is not None:
-                # Initialize description manager with memory system
-                self.description_manager = DescriptionManager(self.memory_system)
-                
-            if self.lore_manager is None and self.memory_system is not None:
-                # Initialize lore manager with memory system
-                self.lore_manager = LoreManager(self.memory_system)
-                
-            if self.documents_manager is None and self.memory_system is not None:
-                # Initialize documents manager with memory system
-                self.documents_manager = DocumentsManager(self.memory_system)
-                
-            if self.knowledge_manager is None and self.memory_system is not None:
-                # Initialize knowledge manager with memory system
-                self.knowledge_manager = KnowledgeManager(self.memory_system)
-                
-            if self.rag_knowledge_manager is None and self.memory_system is not None:
-                # Initialize RAG knowledge manager with memory system
-                self.rag_knowledge_manager = RAGKnowledgeManager(self.memory_system)
-        except ImportError:
-            # Memory system not available, skip initialization
-            logger.debug("Memory system not available, skipping memory initialization")
-    
+    tool_use_behavior: (
+        Literal["run_llm_again", "stop_on_first_tool"] | StopAtTools | ToolsToFinalOutputFunction
+    ) = "run_llm_again"
+    """This lets you configure how tool use is handled.
+    - "run_llm_again": The default behavior. Tools are run, and then the LLM receives the results
+        and gets to respond.
+    - "stop_on_first_tool": The output of the first tool call is used as the final output. This
+        means that the LLM does not process the result of the tool call.
+    - A list of tool names: The agent will stop running if any of the tools in the list are called.
+        The final output will be the output of the first matching tool call. The LLM does not
+        process the result of the tool call.
+    - A function: If you pass a function, it will be called with the run context and the list of
+      tool results. It must return a `ToolToFinalOutputResult`, which determines whether the tool
+      calls result in a final output.
+
+      NOTE: This configuration is specific to FunctionTools. Hosted tools, such as file search,
+      web search, etc are always processed by the LLM.
+    """
+
+    reset_tool_choice: bool = True
+    """Whether to reset the tool choice to the default value after a tool has been called. Defaults
+    to True. This ensures that the agent doesn't enter an infinite loop of tool usage."""
+
     def clone(self, **kwargs: Any) -> Agent[TContext]:
         """Make a copy of the agent, with the given arguments changed. For example, you could do:
         ```
@@ -187,7 +191,7 @@ class Agent(Generic[TContext]):
         """
 
         @function_tool(
-            name_override=tool_name or _utils.transform_string_function_style(self.name),
+            name_override=tool_name or _transforms.transform_string_function_style(self.name),
             description_override=tool_description or "",
         )
         async def run_agent(context: RunContextWrapper, input: str) -> str:
@@ -218,246 +222,23 @@ class Agent(Generic[TContext]):
             logger.error(f"Instructions must be a string or a function, got {self.instructions}")
 
         return None
-        
-    # Memory system methods
-    
-    async def store_message(self, message: Dict[str, Any]) -> Optional[str]:
-        """Store a message in the memory system.
-        
-        Args:
-            message: Message data including content, user_id, room_id, etc.
-            
-        Returns:
-            Memory ID if successful, None otherwise
-        """
-        if self.message_manager is None:
-            logger.warning("No message manager available for agent")
-            return None
-            
-        try:
-            return await self.message_manager.create_memory(message)
-        except Exception as e:
-            logger.error(f"Failed to store message in memory system: {e}")
-            return None
-    
-    async def format_conversation_for_context(
-        self,
-        user_id: str,
-        room_id: str,
-        limit: int = 10
-    ) -> str:
-        """Format conversation history into context for the LLM.
-        
-        Args:
-            user_id: User ID
-            room_id: Room/conversation ID
-            limit: Maximum number of messages to retrieve
-            
-        Returns:
-            Formatted conversation history as string
-        """
-        # Get conversation from memory system
-        conversation = await self.get_conversation(user_id, room_id, limit)
-        
-        if not conversation:
-            return "No previous conversation found."
-            
-        # Format conversation into a readable format for the LLM
-        formatted_lines = []
-        formatted_lines.append("Previous conversation history:")
-        
-        for message in conversation:
-            role = message.get("metadata", {}).get("role", "unknown")
-            username = message.get("metadata", {}).get("username", "Unknown")
-            content_text = message.get("content", {}).get("text", "")
-            
-            if role == "user":
-                formatted_lines.append(f"{username}: {content_text}")
-            elif role == "assistant":
-                formatted_lines.append(f"Assistant: {content_text}")
-            else:
-                formatted_lines.append(f"{role}: {content_text}")
-        
-        return "\n".join(formatted_lines)
-        
-    async def get_conversation(
-        self, 
-        user_id: str, 
-        room_id: str, 
-        limit: int = 20
-    ) -> List[Dict[str, Any]]:
-        """Get recent conversation for the agent.
-        
-        Args:
-            user_id: User ID
-            room_id: Room/conversation ID
-            limit: Maximum number of messages to retrieve
-            
-        Returns:
-            List of message memories in chronological order
-        """
-        if self.message_manager is None:
-            logger.warning("No message manager available for agent")
-            return []
-            
-        return await self.message_manager.get_conversation(
-            user_id=user_id,
-            room_id=room_id,
-            agent_id=self.name,
-            limit=limit
-        )
-        
-    async def find_similar_messages(
-        self, 
-        query: str, 
-        threshold: float = 0.7, 
-        limit: int = 10,
-        user_id: Optional[str] = None,
-        room_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Find messages similar to the query.
-        
-        Args:
-            query: Query text
-            threshold: Similarity threshold
-            limit: Maximum number of results
-            user_id: Optional filter by user ID
-            room_id: Optional filter by room ID
-            
-        Returns:
-            List of similar message memories with similarity scores
-        """
-        if self.memory_system is None or self.message_manager is None:
-            logger.warning("No memory system available for agent")
-            return []
-            
-        # Generate embedding for query (now synchronous)
-        embedding = self.memory_system.embed(query)
-        
-        # Search for similar messages
-        params = {
-            "match_threshold": threshold,
-            "count": limit,
-            "agent_id": self.name
-        }
-        
-        if user_id:
-            params["user_id"] = user_id
-        if room_id:
-            params["room_id"] = room_id
-            
-        return await self.message_manager.search_memories_by_embedding(
-            embedding=embedding,
-            params=params
-        )
-        
-    async def store_user_description(
-        self, 
-        user_id: str, 
-        description: str, 
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> Optional[str]:
-        """Store a user description.
-        
-        Args:
-            user_id: User ID
-            description: User description text
-            metadata: Additional metadata
-            
-        Returns:
-            Memory ID if successful, None otherwise
-        """
-        if self.description_manager is None:
-            logger.warning("No description manager available for agent")
-            return None
-            
-        return await self.description_manager.store_description(
-            user_id=user_id,
-            description=description,
-            metadata=metadata
-        )
-        
-    async def get_user_description(self, user_id: str) -> Optional[str]:
-        """Get the most recent description for a user.
-        
-        Args:
-            user_id: User ID
-            
-        Returns:
-            User description text if found, None otherwise
-        """
-        if self.description_manager is None:
-            logger.warning("No description manager available for agent")
-            return None
-            
-        return await self.description_manager.get_description(user_id)
-        
-    async def store_lore(
-        self, 
-        lore: str, 
-        metadata: Optional[Dict[str, Any]] = None
-    ) -> Optional[str]:
-        """Store agent lore/background information.
-        
-        Args:
-            lore: Lore content
-            metadata: Additional metadata
-            
-        Returns:
-            Memory ID if successful, None otherwise
-        """
-        if self.lore_manager is None:
-            logger.warning("No lore manager available for agent")
-            return None
-            
-        return await self.lore_manager.store_lore(
-            agent_id=self.name,
-            lore=lore,
-            metadata=metadata
-        )
-        
-    async def get_lore(self) -> List[Dict[str, Any]]:
-        """Get all lore for the agent.
-        
-        Returns:
-            List of lore memories
-        """
-        if self.lore_manager is None:
-            logger.warning("No lore manager available for agent")
-            return []
-            
-        return await self.lore_manager.get_lore(self.name)
-        
-    async def get_knowledge_context(
-        self, 
-        query: str, 
-        max_tokens: int = 2000
-    ) -> str:
-        """Get knowledge context for a query using RAG.
-        
-        Args:
-            query: Query to get context for
-            max_tokens: Approximate maximum tokens to return
-            
-        Returns:
-            Formatted context string with relevant knowledge
-        """
-        if self.rag_knowledge_manager is None:
-            logger.warning("No RAG knowledge manager available for agent")
-            return "No knowledge context available."
-            
-        return await self.rag_knowledge_manager.get_knowledge_context(
-            query=query,
-            agent_id=self.name,
-            max_tokens=max_tokens
-        )
 
+    async def get_mcp_tools(self) -> list[Tool]:
+        """Fetches the available tools from the MCP servers."""
+        logger.debug(f"Fetching MCP tools from {len(self.mcp_servers)} servers")
+        if not self.mcp_servers:
+            logger.warning("No MCP servers configured")
+            return []
+        for server in self.mcp_servers:
+            logger.debug(f"MCP server: {getattr(server, 'name', 'Unknown')}, active: {hasattr(server, 'list_tools')}")
+        return await MCPUtil.get_all_function_tools(self.mcp_servers)
 
-# Legacy AgentMemory for backward compatibility
-@dataclass
-class AgentMemory:
-    """Maintains the agent's memory between interactions (Legacy)"""
-    conversation_history: List[Dict[str, Any]] = field(default_factory=list)
-    user_info: Dict[str, Any] = field(default_factory=dict)
-    last_topics: List[str] = field(default_factory=list)
-    client: str = "generic"  # Track which client the conversation is from
+    async def get_all_tools(self) -> list[Tool]:
+        """All agent tools, including MCP tools and function tools."""
+        mcp_tools = await self.get_mcp_tools()
+        return mcp_tools + self.tools
+
+    async def _execute_tool(self, tool_name, tool_args, context):
+        logger.info(f"PRE-EXECUTION TOOL ARGS - {tool_name}: {json.dumps(tool_args, indent=2)}")
+        
+        # Rest of the existing code

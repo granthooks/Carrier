@@ -10,9 +10,9 @@ Configuration for Discord bots [**here**](https://discord.com/developers/applica
 
 ## How to Update the SDK in the Future
 To update the OpenAI SDK:
-* Clone the latest SDK into carrier-updated/
+* Clone the latest SDK into agents-updated/
+    git clone https://github.com/openai/openai-agents-python.git agents-updated
 * Copy the updated files to src/agents/
-* Run the app using the new run_agents_new.py script
 
 ---
 # From OpenAI README:

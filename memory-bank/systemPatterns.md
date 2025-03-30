@@ -182,25 +182,53 @@ class MessageManager(BaseMemoryManager):
 ```
 
 ### 7. MCP Integration Pattern
-Leverages the OpenAI Agent SDK to connect to and interact with MCP servers:
-- **Connection**: Uses `MCPServerStdio` for local subprocess servers or `MCPServerSse` for remote HTTP/SSE servers.
-- **Tool Discovery**: The Agent Runtime calls `list_tools()` on connected MCP servers (potentially cached) to make tools available to the LLM.
-- **Tool Execution**: When the LLM decides to use an MCP tool, the Agent Runtime calls `call_tool()` on the corresponding MCP server via the SDK.
+Leverages the OpenAI Agent SDK to connect to and interact with MCP servers, managed centrally:
+- **Configuration**: A central `config/mcp_servers.json` file defines all available MCP servers (stdio or sse) with their connection parameters (`command`, `args`, `env`, `url`, `headers`, etc.) and unique names (keys). API keys referenced in `env` are loaded from the environment (`.env`).
+- **Character Files**: Agent character files (`characters/*.json`) list the *names* of the MCP servers they require access to (e.g., `["filesystem", "brave-search"]`).
+- **Centralized Management (`run_agents.py`)**:
+    - On startup, identifies the unique set of MCP servers needed by all agents being run.
+    - Uses `contextlib.AsyncExitStack` to start these unique servers concurrently using `MCPServerStdio` or `MCPServerSse`, looking up configurations from the central JSON file.
+    - Manages the lifecycle of these server processes/connections.
+    - Stores active server instances in a map accessible during agent initialization.
+- **Agent Initialization (`initialize_agent` in `run_agents.py`)**:
+    - Receives the list of *active* MCP server instances relevant to the specific agent.
+    - Calls `await server.list_tools()` on each active server to fetch available MCP tool schemas and descriptions.
+    - Combines MCP tool descriptions with built-in tool descriptions.
+    - Passes the combined descriptions to `build_system_prompt`.
+    - Passes the list of active MCP server instances and the list of *built-in* tool objects to the `Agent` constructor (`mcp_servers=[...]`, `tools=[...]`). The SDK internally uses the `mcp_servers` list to handle MCP tool availability and execution.
+- **Tool Execution**: When the LLM calls an MCP tool, the SDK routes the `call_tool()` request to the appropriate active `MCPServer` instance managed by `run_agents.py`.
+- **Introspection**: A built-in `list_available_tools` tool allows agents to report on their combined built-in and MCP tools.
 
 ```python
-# Example using MCPServerStdio from OpenAI Agent SDK
-from agents.mcp import MCPServerStdio
+# Simplified conceptual flow in run_agents.py
 
-async with MCPServerStdio(
-    params={
-        "command": "npx",
-        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"],
-    },
-    cache_tools_list=True # Optional caching
-) as server:
-    # Agent can now list and call tools from this server
-    tools = await server.list_tools()
-    # ... agent uses server.call_tool(name="tool_name", arguments={...})
+import contextlib
+from agents.mcp import MCPServerStdio, MCPServerSse
+
+mcp_configs = load_mcp_server_configs("config/mcp_servers.json")
+required_server_names = get_unique_required_servers(character_files)
+active_servers_map = {}
+
+async with contextlib.AsyncExitStack() as stack:
+    # Start required servers from config
+    for name in required_server_names:
+        config = mcp_configs[name]
+        # ... load env vars, create MCPServerStdio/Sse instance ...
+        server_instance = MCPServerStdio(...) # or MCPServerSse
+        active_server = await stack.enter_async_context(server_instance)
+        active_servers_map[name] = active_server
+        logger.info(f"MCP Server {name} started.")
+
+    # Initialize agents, passing relevant active servers
+    for char_file in character_files:
+        agent_mcp_names = get_agent_mcp_names(char_file)
+        agent_active_servers = [active_servers_map[name] for name in agent_mcp_names if name in active_servers_map]
+        agent, memory = await initialize_agent(char_file, active_mcp_servers=agent_active_servers)
+        # ... start client task ...
+
+    # ... await asyncio.gather(client_tasks) ...
+
+# Servers are automatically stopped when exiting the 'async with' block
 ```
 
 ### 8. Manager Pattern
