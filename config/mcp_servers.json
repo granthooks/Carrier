@@ -3,9 +3,12 @@
     "filesystem": {
       "name": "Filesystem",
       "type": "stdio",
-      "command": "node",
-      "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js", "c:/gkh/documents/Projects/Carrier/mcp_workspace"],
-      "env": {}
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "c:/gkh/documents/Projects/Carrier/mcp_workspace"
+      ]
     },
     "brave-search": {
       "name": "Brave Search",

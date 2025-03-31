@@ -57,9 +57,9 @@
    # Create .env file for API keys
    cp .env.example .env
    # Edit with API keys and database connection
-    ```
+   ```
 
- 6. **MCP Setup** (Using OpenAI Agent SDK):
+4. **MCP Setup** (Using OpenAI Agent SDK):
    - **Central Configuration**: All available MCP servers (stdio or sse) are defined in `config/mcp_servers.json`. This file specifies the server's unique name (key), type, command/args/env (for stdio), url/headers (for sse), and optional caching settings.
    - **Character Configuration**: Individual character files (`characters/*.json`) list the *names* of the MCP servers required by that agent under the `mcp_servers` key (e.g., `["filesystem", "brave-search"]`).
    - **Runtime Management (`run_agents.py`)**:
@@ -69,7 +69,7 @@
      - Passes the *active* server instances to the `Agent` constructor during initialization based on the agent's character file configuration.
    - **Dependencies**: Requires the necessary MCP server executables (e.g., Node.js packages, Python scripts, binaries) to be installed and accessible via the paths specified in `config/mcp_servers.json`.
 
- 4. **Client API Setup**:
+5. **Client API Setup**:
    ```bash
    # Discord API setup
    # Create a Discord application at https://discord.com/developers/applications
@@ -85,7 +85,7 @@
    # Add HTTP_SERVER to .env for the public URL of the FTP server
    ```
 
-5. **Memory System Setup**:
+6. **Memory System Setup**:
    ```bash
    # Supabase setup
    # Create a Supabase project at https://supabase.com/
@@ -347,91 +347,5 @@ python -m build --wheel
 - **Memory CLI**: For management operations
 - **Memory Cache**: For performance optimization
 
-## Memory System Architecture
-
-### Database Schema
-The memory system uses a PostgreSQL database with the pgvector extension for vector operations. The main tables are:
-
-1. **memories**: Stores all memory objects with vector embeddings
-   - id: UUID (primary key)
-   - type: TEXT (message, description, lore, document, knowledge)
-   - content: JSONB (memory content)
-   - embedding: vector(1536) (OpenAI embedding)
-   - user_id: TEXT (user identifier)
-   - room_id: TEXT (conversation/room identifier)
-   - agent_id: TEXT (agent identifier)
-   - metadata: JSONB (additional metadata)
-   - created_at: TIMESTAMP (creation timestamp)
-
-2. **relationships**: Stores relationship information between users and agents
-   - id: UUID (primary key)
-   - user_id: TEXT (user identifier)
-   - agent_id: TEXT (agent identifier)
-   - interaction_count: INTEGER (number of interactions)
-   - sentiment_score: FLOAT (relationship sentiment)
-   - metadata: JSONB (additional metadata)
-   - last_interaction: TIMESTAMP (last interaction timestamp)
-   - created_at: TIMESTAMP (creation timestamp)
-
-### Vector Search
-The memory system uses vector similarity search for retrieving relevant memories:
-
-```sql
-SELECT
-    m.id,
-    m.type,
-    m.content,
-    m.embedding,
-    m.user_id,
-    m.room_id,
-    m.agent_id,
-    m.metadata,
-    m.created_at,
-    1 - (m.embedding <=> $1) as similarity
-FROM
-    memories m
-WHERE
-    m.embedding IS NOT NULL AND
-    1 - (m.embedding <=> $1) > $2
-ORDER BY
-    m.embedding <=> $1
-LIMIT $3
-```
-
-### Memory Managers
-The memory system provides specialized managers for different memory types:
-
-1. **MessageManager**: Handles conversation messages
-2. **DescriptionManager**: Manages user descriptions
-3. **LoreManager**: Stores agent background information
-4. **DocumentsManager**: Handles large documents
-5. **KnowledgeManager**: Manages searchable knowledge fragments
-6. **RAGKnowledgeManager**: Implements retrieval-augmented generation
-
-### Memory CLI
-The memory system includes a CLI tool for management operations:
-
-```bash
-# List memories
-python -m src.tools.memory_cli list --agent assistant --format
-
-# Clear memories
-python -m src.tools.memory_cli clear assistant
-
-# Test similar memory retrieval
-python -m src.tools.memory_cli similar "query text" --agent assistant
-
-# Initialize database schema
-python -m src.tools.memory_cli init
-```
-
 ## Notes
-The Carrier project is designed as a Python reimplementation of the ElizaOS runtime loop, with adaptations to leverage Python's strengths in asyncio, data validation (Pydantic), and web services (FastAPI). The architecture maintains the core concepts of ElizaOS while providing a more Pythonic experience for developers.
-
-Key differences from ElizaOS include the use of Python's async/await pattern, Pydantic models for data validation, and FastAPI for HTTP endpoints. The memory system utilizes PostgreSQL with vector extensions for efficient semantic search, which is critical for the context-aware agent functionality.
-
-The multi-client architecture allows for integration with different platforms, with Discord providing conversational interactions and Instagram enabling media posting capabilities. Each client implementation follows a similar pattern with client-specific adaptations for the unique requirements of each platform. The Discord client uses discord.py for event-based message handling, while the Instagram client uses the Instagram Graph API with a two-step posting process (container creation followed by publishing).
-
-The memory system extends the framework's capabilities by providing persistent storage and retrieval of interactions, enabling context-aware responses across multiple conversations and platforms. The vector-based approach allows for semantic search, retrieving memories based on content similarity rather than just exact matches or timestamps.
-
-The FTP integration for Instagram media posting demonstrates how the framework can handle different types of content beyond text, providing a foundation for future expansions to additional media types and platforms.
+The Carrier project is built upon the OpenAI Agent SDK and draws significant inspiration from ElizaOS's runtime loop architecture while implementing it in Python. This allows us to leverage Python's strengths in areas like asynchronous programming (asyncio), data validation (Pydantic), and web services (FastAPI) while utilizing the SDK's foundation for agent management and MCP integration.

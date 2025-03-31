@@ -1,5 +1,6 @@
 import functools
 import json
+import os
 from typing import TYPE_CHECKING, Any
 
 from .. import _debug
@@ -232,6 +233,28 @@ class MCPUtil:
         try:
             json_data: dict[str, Any] = json.loads(input_json) if input_json else {}
             
+            # Add path normalization for filesystem tools
+            if server.name and "filesystem" in server.name.lower() and "path" in json_data:
+                original_path = json_data["path"]
+                
+                # Remove any mcp_workspace prefix from the path
+                if original_path.startswith("mcp_workspace/") or original_path.startswith("mcp_workspace\\"):
+                    # Remove the mcp_workspace/ prefix
+                    rel_path = original_path[len("mcp_workspace/"):] if original_path.startswith("mcp_workspace/") else original_path[len("mcp_workspace\\"):]
+                    logger.info(f"Removing workspace prefix from path: '{original_path}' -> '{rel_path}'")
+                    json_data["path"] = rel_path
+                
+                # If the path is absolute, extract just the filename
+                elif os.path.isabs(original_path):
+                    file_name = os.path.basename(original_path)
+                    logger.info(f"Converting absolute path to filename only: '{original_path}' -> '{file_name}'")
+                    json_data["path"] = file_name
+                
+                # Replace any backslashes with forward slashes
+                json_data["path"] = json_data["path"].replace('\\', '/')
+                
+                logger.info(f"Final path for filesystem operation: '{json_data['path']}'")
+            
             # Get required schema properties for validation
             input_schema = getattr(tool, "inputSchema", getattr(tool, "parameters", {}))
             if isinstance(input_schema, dict) and "required" in input_schema:
@@ -254,36 +277,48 @@ class MCPUtil:
             logger.debug(f"Invoking MCP tool {tool.name} with input {json_data}")
 
         try:
+            # Add detailed logging for filesystem operations
+            if tool.name in ["write_file", "create_directory", "list_directory", "read_file"]:
+                logger.info(f"DETAILED MCP RESULT - {tool.name}:")
+                logger.info(f"  Input: {json_data}")
+            
             result = await server.call_tool(tool.name, json_data)
+            
+            # Continue with detailed logging for filesystem operations
+            if tool.name in ["write_file", "create_directory", "list_directory", "read_file"]:
+                logger.info(f"  Result content: {result.content}")
+                logger.info(f"  Result meta: {result.meta}")
+                logger.info(f"  Error flag: {result.isError}")
+                
+                # Extract more details from content
+                for item in result.content:
+                    logger.info(f"  Content item type: {item.type}")
+                    logger.info(f"  Content text: {item.text}")
+                    if hasattr(item, "annotations") and item.annotations:
+                        logger.info(f"  Annotations: {item.annotations}")
+            
+            # Rest of existing method...
+            if len(result.content) == 1:
+                tool_output = result.content[0].model_dump_json()
+            elif len(result.content) > 1:
+                tool_output = json.dumps([item.model_dump() for item in result.content])
+            else:
+                logger.error(f"Errored MCP tool result: {result}")
+                tool_output = "Error running tool."
+
+            current_span = get_current_span()
+            if current_span:
+                if isinstance(current_span.span_data, FunctionSpanData):
+                    current_span.span_data.output = tool_output
+                    current_span.span_data.mcp_data = {
+                        "server": server.name,
+                    }
+                else:
+                    logger.warning(
+                        f"Current span is not a FunctionSpanData, skipping tool output: {current_span}"
+                    )
+
+            return tool_output
         except Exception as e:
             logger.error(f"Error invoking MCP tool {tool.name}: {e}")
             raise AgentsException(f"Error invoking MCP tool {tool.name}: {e}") from e
-
-        if _debug.DONT_LOG_TOOL_DATA:
-            logger.debug(f"MCP tool {tool.name} completed.")
-        else:
-            logger.debug(f"MCP tool {tool.name} returned {result}")
-
-        # The MCP tool result is a list of content items, whereas OpenAI tool outputs are a single
-        # string. We'll try to convert.
-        if len(result.content) == 1:
-            tool_output = result.content[0].model_dump_json()
-        elif len(result.content) > 1:
-            tool_output = json.dumps([item.model_dump() for item in result.content])
-        else:
-            logger.error(f"Errored MCP tool result: {result}")
-            tool_output = "Error running tool."
-
-        current_span = get_current_span()
-        if current_span:
-            if isinstance(current_span.span_data, FunctionSpanData):
-                current_span.span_data.output = tool_output
-                current_span.span_data.mcp_data = {
-                    "server": server.name,
-                }
-            else:
-                logger.warning(
-                    f"Current span is not a FunctionSpanData, skipping tool output: {current_span}"
-                )
-
-        return tool_output

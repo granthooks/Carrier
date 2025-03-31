@@ -333,6 +333,22 @@ async def main():
                               # For now, keep placeholder to avoid crashing if key is optional for server
                               # server_env[key] = "" # Or raise error
 
+                # For filesystem server, add additional checks
+                if server_name == "filesystem" or "filesystem" in server_name:
+                    workspace_path = os.path.abspath("mcp_workspace")
+                    logger.info(f"Filesystem MCP server workspace path: {workspace_path}")
+                    logger.info(f"Path exists: {os.path.exists(workspace_path)}")
+                    logger.info(f"Path is writable: {os.access(workspace_path, os.W_OK)}")
+                    
+                    # Check environment variables
+                    config_env = config.get("env", {})
+                    logger.info(f"Filesystem MCP server environment: {config_env}")
+                    
+                    # Log the full resolved command
+                    cmd = config.get("command", "")
+                    args = config.get("args", [])
+                    logger.info(f"Filesystem MCP command: {cmd} {' '.join(args)}")
+
                 if server_type == "stdio":
                     params = {
                         "command": config.get("command"),
@@ -377,6 +393,39 @@ async def main():
 
         logger.info(f"Active MCP servers: {list(active_mcp_servers_map.keys())}")
         logger.info("-------------------- Finished loading MCP servers --------------------")
+
+        # Inside the main function, before starting MCP servers
+        for server_name in required_mcp_server_names:
+            if server_name in mcp_server_configs:
+                config = mcp_server_configs[server_name]
+                if "filesystem" in server_name.lower():
+                    logger.info(f"Filesystem MCP server configuration:")
+                    logger.info(f"  Command: {config.get('command')}")
+                    logger.info(f"  Args: {config.get('args')}")
+                    logger.info(f"  CWD: {config.get('cwd', 'Not specified')}")
+                    logger.info(f"  Environment variables: {config.get('env', {})}")
+                    
+                    # Check if ALLOWED_PATHS is properly set
+                    env_vars = config.get('env', {})
+                    allowed_paths = env_vars.get('ALLOWED_PATHS', 'Not specified')
+                    logger.info(f"  ALLOWED_PATHS: {allowed_paths}")
+                    
+                    # Make sure the directory exists
+                    if allowed_paths != 'Not specified':
+                        # Convert to normalized path
+                        normalized_path = os.path.normpath(allowed_paths)
+                        logger.info(f"  Normalized allowed path: {normalized_path}")
+                        logger.info(f"  Path exists: {os.path.exists(normalized_path)}")
+                        logger.info(f"  Path is directory: {os.path.isdir(normalized_path)}")
+                        logger.info(f"  Path is writable: {os.access(normalized_path, os.W_OK)}")
+                        
+                        # Create the directory if it doesn't exist
+                        if not os.path.exists(normalized_path):
+                            try:
+                                os.makedirs(normalized_path, exist_ok=True)
+                                logger.info(f"  Created directory: {normalized_path}")
+                            except Exception as e:
+                                logger.error(f"  Failed to create directory: {e}")
 
         # Second pass: Initialize agents and clients using the active servers
         logger.info("Initializing agents and clients...")
