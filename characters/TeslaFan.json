@@ -1,7 +1,7 @@
 {
     "name": "TeslaFan",
     "username": "TESLA_FAN",
-    "clients": ["Discord"],
+    "clients": [],
     "tools": [],
     "mcp_servers": [
         "brave-search",

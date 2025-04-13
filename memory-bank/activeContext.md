@@ -1,9 +1,9 @@
 # Active Context: Carrier
 
 ## Current Focus
-* **Proactive Agent Runtime:** Implementing and refining the `ContinuousRuntime` for goal-driven agent behavior using NocoDB SOPs.
+* **Proactive Agent Runtime:** Implementing and refining the `AgentRuntime` for goal-driven agent behavior using NocoDB SOPs. # Renamed
 * **NocoDB Integration:** Defining SOPs and AgentTasks, ensuring reliable interaction via the `nocodb` MCP server.
-* **Testing Proactive Loop:** Verifying task initialization, step execution (tool calls, waits, env updates), status transitions, and error handling.
+* **Testing Proactive Loop:** Verifying task initialization, step execution (tool calls, waits, env updates), status transitions, and error handling within `AgentRuntime`. # Added context
 * **MCP Integration (Ongoing):** Testing integration with various MCP servers.
 * **Memory System (Ongoing):** Continuing development of the Supabase-based memory system.
 * Developing Supabase integration with PostgreSQL and vector extensions for memory storage (ongoing).
@@ -48,13 +48,13 @@
 * March 28, 2025: Updated `CarrierAgent` to store combined tool descriptions.
 * March 28, 2025: Created `tests/test_mcp_integration.py` with an initial test for the filesystem server.
 * **April 10, 2025: Planned Proactive Runtime:** Designed NocoDB schemas (`SOPs`, `SOP_Steps`, `AgentTasks`) for goal-driven execution.
-* **April 10, 2025: Implemented `ContinuousRuntime`:** Created `src/carrier/runtime/continuous_runtime.py` with logic for task processing, step execution, status management, and NocoDB interaction via MCP. Added validation for required NocoDB tools.
-* **April 10, 2025: Integrated `ContinuousRuntime`:** Modified `run_agents.py` to initialize and manage the `ContinuousRuntime` task alongside client tasks for agents with defined goals.
+* **April 10, 2025: Implemented `AgentRuntime`:** Created `src/carrier/runtime/agent_runtime.py` (originally `continuous_runtime.py`) with logic for task processing, step execution, status management, and NocoDB interaction via MCP. Added validation for required NocoDB tools. # Renamed class and file
+* **April 10, 2025: Integrated `AgentRuntime`:** Modified `run_agents.py` to initialize and manage the `AgentRuntime` task alongside client tasks for agents with defined goals. # Renamed class
 * **April 11, 2025: Populated Initial NocoDB Data:** Successfully created initial SOP, Step, and AgentTask records for `TeslaFan` agent's `DailyNewsReport` goal using the `nocodb` MCP tool (after troubleshooting).
 
 ## Next Steps
-* **`ContinuousRuntime` Testing & Refinement:**
-    * Run `run_agents.py` and monitor logs for `TeslaFan`'s `ContinuousRuntime`.
+* **`AgentRuntime` Testing & Refinement:** # Renamed section
+    * Run `run_agents.py` and monitor logs for `TeslaFan`'s `AgentRuntime`. # Renamed class
     * Verify task initialization (`_initialize_tasks` logic).
     * Verify correct execution of different step actions (`call_tool`, `wait`, `update_environment`, `log_message`).
     * Test parameter resolution (`environment`, `prior_step_result`).
@@ -64,7 +64,7 @@
     * Test `control_signal` handling (Pause, Stop).
     * Refine logging within the runtime.
 * **Agent Integration:**
-    * Ensure `agent.call_tool` and `agent.call_mcp_tool` (or equivalent) work correctly when called from `ContinuousRuntime`.
+    * Ensure `agent.call_tool` and `agent.call_mcp_tool` (or equivalent) work correctly when called from `AgentRuntime`. # Renamed class
     * Test the reactive flow's ability to query task status from `AgentTasks` via NocoDB tools.
 * **MCP Integration Refinement (Ongoing):**
     * Thoroughly test integration with various MCP servers defined in `config/mcp_servers.json`.
@@ -137,7 +137,7 @@
     * Refining error handling for scenarios where specific servers fail to start or respond.
     * Ensuring security when passing environment variables (like API keys) to server subprocesses.
     * Verifying compatibility as MCP servers are updated.
-* **Continuous Runtime Considerations:**
+* **Agent Runtime Considerations:** # Renamed section
     * Scalability of checking many tasks frequently.
     * Robustness of NocoDB interactions (retries, error parsing).
     * Complexity of `prior_step_result` handling if non-sequential results are needed.
@@ -145,11 +145,11 @@
     * Mechanism for creating new tasks in `AgentTasks` (manual, API, triggered by goals).
 
 ## Notes
-The project has successfully integrated the initial MCP server functionality. A major architectural addition, the `ContinuousRuntime`, has been implemented to enable proactive, goal-driven agent behavior based on SOPs defined in NocoDB. This runtime runs as a separate asynchronous task for each eligible agent, processing steps defined in the `SOP_Steps` table and managing state in the `AgentTasks` table via the `nocodb` MCP server. Validation ensures the runtime only starts if required NocoDB tools are available.
+The project has successfully integrated the initial MCP server functionality. A major architectural addition, the `AgentRuntime` (formerly `ContinuousRuntime`), has been implemented to enable proactive, goal-driven agent behavior based on SOPs defined in NocoDB. This runtime runs as a separate asynchronous task for each eligible agent, processing steps defined in the `SOP_Steps` table and managing state in the `AgentTasks` table via the `nocodb` MCP server. Validation ensures the runtime only starts if required NocoDB tools are available. # Renamed class
 
-The existing reactive runtime loop (based on client messages) remains, and the proactive `ContinuousRuntime` operates alongside it. The reactive loop can query the `AgentTasks` table to provide status updates on proactive work.
+The existing reactive runtime loop (based on client messages) remains, and the proactive `AgentRuntime` operates alongside it. The reactive loop can query the `AgentTasks` table to provide status updates on proactive work. # Renamed class
 
-The next critical steps involve setting up the NocoDB tables with actual SOP data and thoroughly testing the `ContinuousRuntime`'s execution logic, state management, and interaction with the agent's tool execution capabilities. The memory system implementation also remains ongoing.
+The next critical steps involve setting up the NocoDB tables with actual SOP data and thoroughly testing the `AgentRuntime`'s execution logic, state management, and interaction with the agent's tool execution capabilities. The memory system implementation also remains ongoing. # Renamed class
 </final_file_content>
 
 IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.

@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 # Import SDK components needed
-from agents import Agent, RunContextWrapper, Tool
+from agents import Agent, RunContextWrapper, Tool, trace # Added trace
 from agents.tool import FunctionTool # Specifically need FunctionTool
 
 # Assuming Agent, Tool, MCPServer types are available from the SDK/project
@@ -22,7 +22,7 @@ NOCODB_SOPS_TABLE = "SOPs"
 NOCODB_SOP_STEPS_TABLE = "SOP_Steps"
 
 
-class ContinuousRuntime:
+class AgentRuntime: # Renamed class
     """
     Manages the proactive, goal-driven execution loop for an agent
     based on Standard Operating Procedures (SOPs) defined in NocoDB.
@@ -37,7 +37,7 @@ class ContinuousRuntime:
         context_wrapper: Optional[RunContextWrapper] # Added context_wrapper
     ):
         """
-        Initializes the Continuous Runtime for an agent.
+        Initializes the Agent Runtime for an agent. # Updated docstring
 
         Args:
             agent: The initialized agent instance.
@@ -57,13 +57,13 @@ class ContinuousRuntime:
 
         # Store tools in a dictionary for quick lookup
         self.tools_map: Dict[str, Tool] = {tool.name: tool for tool in all_tools}
-        logger.info(f"[{self.agent_name}] ContinuousRuntime initialized with {len(self.tools_map)} tools: {', '.join(self.tools_map.keys())}")
+        logger.info(f"[{self.agent_name}] AgentRuntime initialized with {len(self.tools_map)} tools: {', '.join(self.tools_map.keys())}") # Updated log
 
         # --- NocoDB Tool Validation (using the tools_map) ---
         required_nocodb_tools = {'retrieve_records', 'update_records'}
         missing_tools = required_nocodb_tools - set(self.tools_map.keys())
         if missing_tools:
-            error_msg = f"[{self.agent_name}] ContinuousRuntime cannot start: Missing required NocoDB tools in agent's tool list: {', '.join(missing_tools)}"
+            error_msg = f"[{self.agent_name}] AgentRuntime cannot start: Missing required NocoDB tools in agent's tool list: {', '.join(missing_tools)}" # Updated log/error
             logger.error(error_msg)
             raise ValueError(error_msg)
         else:
@@ -71,27 +71,29 @@ class ContinuousRuntime:
 
     async def run_continuously(self):
         """Main async loop that periodically checks and processes agent tasks."""
-        logger.info(f"[{self.agent_name}] ContinuousRuntime starting...")
+        logger.info(f"[{self.agent_name}] AgentRuntime starting...") # Updated log
         # Initialize tracked tasks after successful validation in __init__
         await self._initialize_tasks()
 
         while True:
             try:
-                # Create a copy of tracked IDs in case the list is modified during iteration
-                current_tasks_to_check = list(self.tracked_task_ids)
-                if not current_tasks_to_check:
-                    logger.debug(f"[{self.agent_name}] No active tasks being tracked. Sleeping.")
-                else:
-                    logger.debug(f"[{self.agent_name}] Checking {len(current_tasks_to_check)} tracked tasks.")
+                # Trace each iteration of the main loop's successful path
+                with trace(f"{self.agent_name} Agent Runtime Loop Iteration"): # Updated trace name
+                    # Create a copy of tracked IDs in case the list is modified during iteration
+                    current_tasks_to_check = list(self.tracked_task_ids)
+                    if not current_tasks_to_check:
+                        logger.debug(f"[{self.agent_name}] No active tasks being tracked this iteration.")
+                    else:
+                        logger.debug(f"[{self.agent_name}] Checking {len(current_tasks_to_check)} tracked tasks this iteration.")
                     # Process tasks concurrently? For now, sequentially.
                     for task_id in current_tasks_to_check:
                         await self._process_task(task_id)
 
             except asyncio.CancelledError:
-                logger.info(f"[{self.agent_name}] ContinuousRuntime loop cancelled.")
+                logger.info(f"[{self.agent_name}] AgentRuntime loop cancelled.") # Updated log
                 break
             except Exception as e:
-                logger.error(f"[{self.agent_name}] Error in ContinuousRuntime loop: {e}", exc_info=True)
+                logger.error(f"[{self.agent_name}] Error in AgentRuntime loop: {e}", exc_info=True) # Updated log
                 # Avoid tight loop on persistent error, sleep longer
                 await asyncio.sleep(self.loop_interval_seconds * 5)
 
@@ -353,184 +355,194 @@ class ContinuousRuntime:
         Executes a single step based on its action type.
         Returns a dictionary containing results like 'tool_output', 'environment_updates', 'log_message', 'wait_until'.
         """
-        action = step_definition.get('action')
-        # Safely parse current environment from JSON string
-        current_env_str = task_state.get('current_environment', '{}')
-        try:
-            # Assume it's stored as JSON string, parse it
-            current_env = json.loads(current_env_str) if isinstance(current_env_str, str) else (current_env_str or {})
-            if not isinstance(current_env, dict): # Ensure it's a dict after potential parsing
-                 logger.warning(f"[{self.agent_name}] Task {task_state.get('task_id')}: Parsed current_environment is not a dict. Resetting to empty dict. Content: {current_env_str}")
-                 current_env = {}
-        except (json.JSONDecodeError, TypeError):
-            logger.warning(f"[{self.agent_name}] Task {task_state.get('task_id')}: Failed to parse current_environment JSON. Resetting to empty dict. Content: {current_env_str}")
-            current_env = {}
-
-        # Safely parse last result from JSON string
-        last_result_str = task_state.get('last_result')
-        last_result = None
-        if isinstance(last_result_str, str):
-            try:
-                last_result = json.loads(last_result_str)
-            except json.JSONDecodeError:
-                logger.warning(f"[{self.agent_name}] Task {task_state.get('task_id')}: last_result is not valid JSON. Treating as None. Content: {last_result_str}")
-                last_result = None # Or maybe keep the raw string? Depends on tool needs.
-        elif last_result_str is not None:
-             last_result = last_result_str # Keep if not string (e.g., already parsed by NocoDB?)
-
-
-        step_id = step_definition.get('step_id')
-
-        result_package = {} # Collect results here
-
-        if action == 'call_tool':
-            tool_name = step_definition.get('tool_name')
-            if not tool_name: raise ValueError(f"Step {step_id}: Missing 'tool_name' for call_tool action")
-
-            # Resolve parameters
-            resolved_params = {}
-            # Safely parse tool_params from JSON string
-            tool_param_defs_str = step_definition.get('tool_params', '{}')
-            try:
-                tool_param_defs = json.loads(tool_param_defs_str) if isinstance(tool_param_defs_str, str) else (tool_param_defs_str or {})
-            except (json.JSONDecodeError, TypeError):
-                 raise ValueError(f"Step {step_id}: Invalid JSON in tool_params: {tool_param_defs_str}")
-
-            if isinstance(tool_param_defs, dict):
-                for name, definition in tool_param_defs.items():
-                    if not isinstance(definition, dict):
-                         raise ValueError(f"Step {step_id}: Invalid parameter definition format for '{name}'")
-
-                    if 'value' in definition:
-                        resolved_params[name] = definition['value']
-                    elif definition.get('source') == 'environment':
-                        key = definition.get('key')
-                        if not key: raise ValueError(f"Step {step_id}: Missing 'key' for environment source in param '{name}'")
-                        resolved_params[name] = current_env.get(key) # Returns None if key missing
-                    elif definition.get('source') == 'prior_step_result':
-                        key = definition.get('key')
-                        if not key: raise ValueError(f"Step {step_id}: Missing 'key' for prior_step_result source in param '{name}'")
-                        if isinstance(last_result, dict):
-                            resolved_params[name] = last_result.get(key)
-                        else:
-                             logger.warning(f"Step {step_id}: Cannot read key '{key}' from prior_step_result as it's not a dictionary: {last_result}")
-                             resolved_params[name] = None
-                    else:
-                         raise ValueError(f"Step {step_id}: Invalid source definition for param '{name}'")
-            else:
-                 logger.warning(f"Step {step_id}: 'tool_params' could not be parsed as a dictionary.")
-
-
-            logger.debug(f"[{self.agent_name}] Task {task_state.get('task_id')}: Calling tool '{tool_name}' with params: {resolved_params}")
-
-            # --- Execute Tool ---
-            tool_to_execute = self.tools_map.get(tool_name)
-
-            if not tool_to_execute:
-                 raise ValueError(f"Step {step_id}: Tool '{tool_name}' not found in agent's available tools.")
-
-            if not isinstance(tool_to_execute, FunctionTool):
-                 raise NotImplementedError(f"Step {step_id}: Programmatic execution for non-FunctionTool type '{type(tool_to_execute).__name__}' not supported.")
-
-            # Serialize resolved params to JSON string for on_invoke_tool
-            try:
-                 params_json_string = json.dumps(resolved_params)
-            except TypeError as e:
-                 raise ValueError(f"Step {step_id}: Failed to serialize parameters for tool '{tool_name}': {e}") from e
-
-            # Call the tool's invoke method, passing context and JSON string args
-            tool_result = await tool_to_execute.on_invoke_tool(self.context_wrapper, params_json_string)
-
-            logger.debug(f"[{self.agent_name}] Task {task_state.get('task_id')}: Tool '{tool_name}' result: {tool_result}")
-            result_package['tool_output'] = tool_result # Store raw output (should be string or str-able)
-
-            # Apply result mapping to environment
-            environment_updates = {}
-            # Safely parse result_mapping from JSON string
-            result_mappings_str = step_definition.get('result_mapping', '[]')
-            try:
-                result_mappings = json.loads(result_mappings_str) if isinstance(result_mappings_str, str) else (result_mappings_str or [])
-            except (json.JSONDecodeError, TypeError):
-                 raise ValueError(f"Step {step_id}: Invalid JSON in result_mapping: {result_mappings_str}")
-
-            # Ensure tool_result is dict for mapping; handle string results if needed
-            tool_result_dict = None
-            if isinstance(tool_result, str):
+        step_id = step_definition.get('step_id', 'UnknownStep')
+        action = step_definition.get('action', 'UnknownAction')
+        # Trace the execution of this specific step
+        with trace(f"{self.agent_name} Execute Step {step_id} ({action})", inputs={"task_state": task_state, "step_definition": step_definition}) as step_span:
+            try: # Wrap execution logic in try/except within the trace
+                # Safely parse current environment from JSON string
+                current_env_str = task_state.get('current_environment', '{}')
                 try:
-                    tool_result_dict = json.loads(tool_result)
-                except json.JSONDecodeError:
-                    logger.warning(f"Step {step_id}: Tool result is a string but not valid JSON, cannot apply mapping: {tool_result}")
-            elif isinstance(tool_result, dict):
-                tool_result_dict = tool_result
+                    # Assume it's stored as JSON string, parse it
+                    current_env = json.loads(current_env_str) if isinstance(current_env_str, str) else (current_env_str or {})
+                    if not isinstance(current_env, dict): # Ensure it's a dict after potential parsing
+                        logger.warning(f"[{self.agent_name}] Task {task_state.get('task_id')}: Parsed current_environment is not a dict. Resetting to empty dict. Content: {current_env_str}")
+                        current_env = {}
+                except (json.JSONDecodeError, TypeError):
+                    logger.warning(f"[{self.agent_name}] Task {task_state.get('task_id')}: Failed to parse current_environment JSON. Resetting to empty dict. Content: {current_env_str}")
+                    current_env = {}
 
-            if isinstance(result_mappings, list) and isinstance(tool_result_dict, dict):
-                 for mapping in result_mappings:
-                     if not isinstance(mapping, dict): continue # Skip invalid mapping entries
-                     source_key = mapping.get('source_key')
-                     target_key = mapping.get('target_key')
-                     if source_key and target_key:
-                         if source_key in tool_result_dict:
-                             environment_updates[target_key] = tool_result_dict[source_key]
-                         elif mapping.get('required', False):
-                              raise ValueError(f"Step {step_id}: Required result key '{source_key}' not found in tool output for mapping.")
-            result_package['environment_updates'] = environment_updates
+                # Safely parse last result from JSON string (Still inside the try block)
+                last_result_str = task_state.get('last_result')
+                last_result = None
+                if isinstance(last_result_str, str):
+                    try:
+                        last_result = json.loads(last_result_str)
+                    except json.JSONDecodeError:
+                        logger.warning(f"[{self.agent_name}] Task {task_state.get('task_id')}: last_result is not valid JSON. Treating as None. Content: {last_result_str}")
+                        last_result = None # Or maybe keep the raw string? Depends on tool needs.
+                elif last_result_str is not None:
+                    last_result = last_result_str # Keep if not string (e.g., already parsed by NocoDB?)
 
-        elif action == 'wait':
-            duration = step_definition.get('duration_seconds')
-            if not isinstance(duration, (int, float)) or duration < 0:
-                raise ValueError(f"Step {step_id}: Invalid or missing 'duration_seconds' for wait action")
-            wait_until_dt = datetime.now(timezone.utc) + timedelta(seconds=duration)
-            result_package['wait_until'] = wait_until_dt.isoformat() # Store ISO string
 
-        elif action == 'update_environment':
-             # Safely parse environment_updates from JSON string
-            updates_def_str = step_definition.get('environment_updates', '{}')
-            try:
-                updates_def = json.loads(updates_def_str) if isinstance(updates_def_str, str) else (updates_def_str or {})
-            except (json.JSONDecodeError, TypeError):
-                 raise ValueError(f"Step {step_id}: Invalid JSON in environment_updates: {updates_def_str}")
+                # step_id already defined above before trace block
 
-            environment_updates = {}
-            if isinstance(updates_def, dict):
-                for target_key, definition in updates_def.items():
-                     if isinstance(definition, dict):
-                         if 'value' in definition:
-                             environment_updates[target_key] = definition['value']
-                         elif definition.get('source') == 'environment':
-                             source_key = definition.get('key')
-                             if not source_key: raise ValueError(f"Step {step_id}: Missing 'key' for environment source in update '{target_key}'")
-                             environment_updates[target_key] = current_env.get(source_key)
-                         # Add more sources if needed
-                         else:
-                              raise ValueError(f"Step {step_id}: Invalid source definition for environment update '{target_key}'")
-                     elif definition is None: # Allow setting to null
-                          environment_updates[target_key] = None
-                     else: # Treat as static value if not a dict or None
-                          environment_updates[target_key] = definition
-            else:
-                 logger.warning(f"Step {step_id}: 'environment_updates' could not be parsed as a dictionary.")
+                result_package = {} # Collect results here
 
-            result_package['environment_updates'] = environment_updates
+                # --- Action Execution Logic (Still inside the try block) ---
+                if action == 'call_tool':
+                    tool_name = step_definition.get('tool_name')
+                    if not tool_name: raise ValueError(f"Step {step_id}: Missing 'tool_name' for call_tool action")
 
-        elif action == 'log_message':
-            template = step_definition.get('message_template', '')
-            message = template
-            # Simple substitution: replace {{environment.key}} or {{env.key}}
-            import re
-            # Ensure current_env is a dict before iterating
-            if isinstance(current_env, dict):
-                for key, value in current_env.items():
-                    # Handle both {{environment.key}} and {{env.key}}
-                    placeholder1 = f"{{{{environment.{key}}}}}"
-                    placeholder2 = f"{{{{env.{key}}}}}"
-                    # Ensure value is string for replacement
-                    message = message.replace(placeholder1, str(value)).replace(placeholder2, str(value))
-            result_package['log_message'] = message
+                    # Resolve parameters
+                    resolved_params = {}
+                    # Safely parse tool_params from JSON string
+                    tool_param_defs_str = step_definition.get('tool_params', '{}')
+                    try:
+                        tool_param_defs = json.loads(tool_param_defs_str) if isinstance(tool_param_defs_str, str) else (tool_param_defs_str or {})
+                    except (json.JSONDecodeError, TypeError):
+                        raise ValueError(f"Step {step_id}: Invalid JSON in tool_params: {tool_param_defs_str}")
 
-        else:
-            raise ValueError(f"Step {step_id}: Unsupported action type: {action}")
+                    if isinstance(tool_param_defs, dict):
+                        for name, definition in tool_param_defs.items():
+                            if not isinstance(definition, dict):
+                                raise ValueError(f"Step {step_id}: Invalid parameter definition format for '{name}'")
 
-        return result_package
+                            if 'value' in definition:
+                                resolved_params[name] = definition['value']
+                            elif definition.get('source') == 'environment':
+                                key = definition.get('key')
+                                if not key: raise ValueError(f"Step {step_id}: Missing 'key' for environment source in param '{name}'")
+                                resolved_params[name] = current_env.get(key) # Returns None if key missing
+                            elif definition.get('source') == 'prior_step_result':
+                                key = definition.get('key')
+                                if not key: raise ValueError(f"Step {step_id}: Missing 'key' for prior_step_result source in param '{name}'")
+                                if isinstance(last_result, dict):
+                                    resolved_params[name] = last_result.get(key)
+                                else:
+                                    logger.warning(f"Step {step_id}: Cannot read key '{key}' from prior_step_result as it's not a dictionary: {last_result}")
+                                    resolved_params[name] = None
+                            else:
+                                raise ValueError(f"Step {step_id}: Invalid source definition for param '{name}'")
+                    else:
+                        logger.warning(f"Step {step_id}: 'tool_params' could not be parsed as a dictionary.")
+
+
+                    logger.debug(f"[{self.agent_name}] Task {task_state.get('task_id')}: Calling tool '{tool_name}' with params: {resolved_params}")
+
+                    # --- Execute Tool ---
+                    tool_to_execute = self.tools_map.get(tool_name)
+
+                    if not tool_to_execute:
+                        raise ValueError(f"Step {step_id}: Tool '{tool_name}' not found in agent's available tools.")
+
+                    if not isinstance(tool_to_execute, FunctionTool):
+                        raise NotImplementedError(f"Step {step_id}: Programmatic execution for non-FunctionTool type '{type(tool_to_execute).__name__}' not supported.")
+
+                    # Serialize resolved params to JSON string for on_invoke_tool
+                    try:
+                        params_json_string = json.dumps(resolved_params)
+                    except TypeError as e:
+                        raise ValueError(f"Step {step_id}: Failed to serialize parameters for tool '{tool_name}': {e}") from e
+
+                    # Call the tool's invoke method, passing context and JSON string args
+                    tool_result = await tool_to_execute.on_invoke_tool(self.context_wrapper, params_json_string)
+
+                    logger.debug(f"[{self.agent_name}] Task {task_state.get('task_id')}: Tool '{tool_name}' result: {tool_result}")
+                    result_package['tool_output'] = tool_result # Store raw output (should be string or str-able)
+
+                    # Apply result mapping to environment
+                    environment_updates = {}
+                    # Safely parse result_mapping from JSON string
+                    result_mappings_str = step_definition.get('result_mapping', '[]')
+                    try:
+                        result_mappings = json.loads(result_mappings_str) if isinstance(result_mappings_str, str) else (result_mappings_str or [])
+                    except (json.JSONDecodeError, TypeError):
+                        raise ValueError(f"Step {step_id}: Invalid JSON in result_mapping: {result_mappings_str}")
+
+                    # Ensure tool_result is dict for mapping; handle string results if needed
+                    tool_result_dict = None
+                    if isinstance(tool_result, str):
+                        try:
+                            tool_result_dict = json.loads(tool_result)
+                        except json.JSONDecodeError:
+                            logger.warning(f"Step {step_id}: Tool result is a string but not valid JSON, cannot apply mapping: {tool_result}")
+                    elif isinstance(tool_result, dict):
+                        tool_result_dict = tool_result
+
+                    if isinstance(result_mappings, list) and isinstance(tool_result_dict, dict):
+                        for mapping in result_mappings:
+                            if not isinstance(mapping, dict): continue # Skip invalid mapping entries
+                            source_key = mapping.get('source_key')
+                            target_key = mapping.get('target_key')
+                            if source_key and target_key:
+                                if source_key in tool_result_dict:
+                                    environment_updates[target_key] = tool_result_dict[source_key]
+                                elif mapping.get('required', False):
+                                    raise ValueError(f"Step {step_id}: Required result key '{source_key}' not found in tool output for mapping.")
+                    result_package['environment_updates'] = environment_updates
+
+                elif action == 'wait':
+                    duration = step_definition.get('duration_seconds')
+                    if not isinstance(duration, (int, float)) or duration < 0:
+                        raise ValueError(f"Step {step_id}: Invalid or missing 'duration_seconds' for wait action")
+                    wait_until_dt = datetime.now(timezone.utc) + timedelta(seconds=duration)
+                    result_package['wait_until'] = wait_until_dt.isoformat() # Store ISO string
+
+                elif action == 'update_environment':
+                    # Safely parse environment_updates from JSON string
+                    updates_def_str = step_definition.get('environment_updates', '{}')
+                    try:
+                        updates_def = json.loads(updates_def_str) if isinstance(updates_def_str, str) else (updates_def_str or {})
+                    except (json.JSONDecodeError, TypeError):
+                        raise ValueError(f"Step {step_id}: Invalid JSON in environment_updates: {updates_def_str}")
+
+                    environment_updates = {}
+                    if isinstance(updates_def, dict):
+                        for target_key, definition in updates_def.items():
+                            if isinstance(definition, dict):
+                                if 'value' in definition:
+                                    environment_updates[target_key] = definition['value']
+                                elif definition.get('source') == 'environment':
+                                    source_key = definition.get('key')
+                                    if not source_key: raise ValueError(f"Step {step_id}: Missing 'key' for environment source in update '{target_key}'")
+                                    environment_updates[target_key] = current_env.get(source_key)
+                                # Add more sources if needed
+                                else:
+                                    raise ValueError(f"Step {step_id}: Invalid source definition for environment update '{target_key}'")
+                            elif definition is None: # Allow setting to null
+                                environment_updates[target_key] = None
+                            else: # Treat as static value if not a dict or None
+                                environment_updates[target_key] = definition
+                    else:
+                        logger.warning(f"Step {step_id}: 'environment_updates' could not be parsed as a dictionary.")
+
+                    result_package['environment_updates'] = environment_updates
+
+                elif action == 'log_message':
+                    template = step_definition.get('message_template', '')
+                    message = template
+                    # Simple substitution: replace {{environment.key}} or {{env.key}}
+                    import re
+                    # Ensure current_env is a dict before iterating
+                    if isinstance(current_env, dict):
+                        for key, value in current_env.items():
+                            # Handle both {{environment.key}} and {{env.key}}
+                            placeholder1 = f"{{{{environment.{key}}}}}"
+                            placeholder2 = f"{{{{env.{key}}}}}"
+                            # Ensure value is string for replacement
+                            message = message.replace(placeholder1, str(value)).replace(placeholder2, str(value))
+                    result_package['log_message'] = message
+
+                else:
+                    raise ValueError(f"Step {step_id}: Unsupported action type: {action}")
+
+                # Add outputs to the trace span before returning on success (Still inside the try block)
+                step_span.set_outputs(result_package)
+                return result_package
+            except Exception as e: # This except block should align with the try block starting on line 356
+                step_span.set_error(e) # Record error in the trace span
+                raise # Re-raise the exception to be handled by _process_task
 
     # --- NocoDB Helper Methods (Now use the generic tool execution) ---
 

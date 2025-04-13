@@ -19,7 +19,7 @@ load_dotenv()
 sys.path.append(os.path.abspath("src"))
 
 # Import standard OpenAI Agents SDK
-from agents import Agent, Runner, RunContextWrapper, RunHooks, Usage, Tool, function_tool
+from agents import Agent, Runner, RunContextWrapper, RunHooks, Usage, Tool, function_tool, trace # Added trace
 from agents.mcp import MCPServer, MCPServerStdio, MCPServerSse # Added MCP imports
 # from agents.function_schema import FunctionInfo # Added for tool schema handling
 
@@ -28,8 +28,8 @@ from src.carrier.extensions.carrier_agent import AgentMemory, CarrierAgent
 from src.carrier.clients.discord_client import DiscordAgentClient
 from src.carrier.clients.instagram_client import InstagramAgentClient
 from src.carrier.utils.logging import configure_logging
-# Import the new runtime
-from src.carrier.runtime.continuous_runtime import ContinuousRuntime
+# Import the renamed runtime
+from src.carrier.runtime.agent_runtime import AgentRuntime # Updated import
 # Import tools and tool registry functionality
 from src.carrier.tools import get_registered_tools
 
@@ -146,7 +146,7 @@ async def initialize_agent(
     client: str = "generic",
     active_mcp_servers: Optional[List[MCPServer]] = None,
     context: Optional[Any] = None # Added context parameter
-) -> Tuple[CarrierAgent, AgentMemory, Optional[ContinuousRuntime]]:
+) -> Tuple[CarrierAgent, AgentMemory, Optional[AgentRuntime]]: # Updated return type hint
     
     """Initialize a Carrier agent from character file, including MCP tools."""
     logger.info(f"Initializing agent from {character_file} for {client}")
@@ -273,8 +273,8 @@ async def initialize_agent(
     # except Exception as e:
     #     logger.error(f"Error getting MCP tools: {e}")
 
-    # --- Continuous Runtime Initialization (after agent is created) ---
-    continuous_runtime_instance = None
+    # --- Agent Runtime Initialization (after agent is created) --- # Updated comment
+    agent_runtime_instance = None # Renamed variable
     goals = character_data.get("goals", []) # Assuming goals are directly in character_data
     if goals:
         # Find the NocoDB MCP server instance from the validated active list
@@ -288,11 +288,11 @@ async def initialize_agent(
                 logger.debug(f"[{agent.name}] Found {len(all_agent_tools)} total tools.")
 
                 # Create context wrapper if context is provided
-                # Pass None if context is None, ContinuousRuntime needs to handle it
+                # Pass None if context is None, AgentRuntime needs to handle it
                 context_wrapper = RunContextWrapper(context=context) if context is not None else None
 
-                logger.info(f"[{agent.name}] Initializing ContinuousRuntime...")
-                continuous_runtime_instance = ContinuousRuntime(
+                logger.info(f"[{agent.name}] Initializing AgentRuntime...") # Updated log
+                agent_runtime_instance = AgentRuntime( # Renamed class instantiation
                     agent=agent,
                     agent_name=agent.name,
                     goals=goals,
@@ -300,19 +300,19 @@ async def initialize_agent(
                     all_tools=all_agent_tools, # Pass the combined list of Tool objects
                     context_wrapper=context_wrapper # Pass the context wrapper
                 )
-            except ValueError as e: # Catch potential validation errors if added back to ContinuousRuntime init
-                logger.error(f"[{agent.name}] Failed to initialize ContinuousRuntime (Validation Error): {e}")
-                continuous_runtime_instance = None # Ensure it's None if validation fails
+            except ValueError as e: # Catch potential validation errors if added back to AgentRuntime init
+                logger.error(f"[{agent.name}] Failed to initialize AgentRuntime (Validation Error): {e}") # Updated log
+                agent_runtime_instance = None # Ensure it's None if validation fails
             except AttributeError as e:
-                 logger.error(f"[{agent.name}] Failed to list tools from nocodb MCP server (AttributeError): {e}. ContinuousRuntime will not start.")
-                 continuous_runtime_instance = None
+                 logger.error(f"[{agent.name}] Failed to list tools from nocodb MCP server (AttributeError): {e}. AgentRuntime will not start.") # Updated log
+                 agent_runtime_instance = None
             except Exception as e:
-                 logger.error(f"[{agent.name}] Unexpected error during ContinuousRuntime initialization: {e}", exc_info=True)
-                 continuous_runtime_instance = None
+                 logger.error(f"[{agent.name}] Unexpected error during AgentRuntime initialization: {e}", exc_info=True) # Updated log
+                 agent_runtime_instance = None
         else:
-            logger.warning(f"[{agent.name}] Agent has goals but 'nocodb' MCP server is not active/configured or validated. ContinuousRuntime will not start.")
+            logger.warning(f"[{agent.name}] Agent has goals but 'nocodb' MCP server is not active/configured or validated. AgentRuntime will not start.") # Updated log
 
-    return agent, memory, continuous_runtime_instance # Modified return
+    return agent, memory, agent_runtime_instance # Renamed return variable
 
 # --- Main Execution Logic ---
 
@@ -348,15 +348,17 @@ async def main():
     client_tasks = []
     active_mcp_servers_map: Dict[str, MCPServer] = {}
 
-    # Use AsyncExitStack to manage MCP server lifecycles
-    async with contextlib.AsyncExitStack() as stack:
-        # Start all required MCP servers concurrently
-        startup_tasks = []
-        for server_name in required_mcp_server_names:
-            if server_name in mcp_server_configs:
-                config = mcp_server_configs[server_name]
-                server_type = config.get("type")
-                display_name = config.get("name", server_name) # Use provided name or key
+    # Wrap the main execution block with tracing
+    with trace("Carrier Agent Run"):
+        # Use AsyncExitStack to manage MCP server lifecycles
+        async with contextlib.AsyncExitStack() as stack:
+            # Start all required MCP servers concurrently
+            startup_tasks = []
+            for server_name in required_mcp_server_names:
+                if server_name in mcp_server_configs: # Correct indentation
+                    config = mcp_server_configs[server_name]
+                    server_type = config.get("type")
+                    display_name = config.get("name", server_name) # Use provided name or key
                 cache_tools = config.get("cache_tools_list", False)
                 
                 server_instance = None
@@ -403,19 +405,19 @@ async def main():
                     }
                     if not params["command"]:
                          logger.error(f"Missing 'command' for stdio MCP server: {server_name}")
-                         continue
+                         continue # Correct indentation
                     server_instance = MCPServerStdio(name=display_name, params=params, cache_tools_list=cache_tools)
                 elif server_type == "sse":
                     url = config.get("url")
                     headers = config.get("headers") # Headers might contain auth tokens
                     if not url:
                          logger.error(f"Missing 'url' for sse MCP server: {server_name}")
-                         continue
+                         continue # Correct indentation
                     # Note: MCPServerSse doesn't explicitly take env, but headers can be used for tokens
                     server_instance = MCPServerSse(name=display_name, url=url, headers=headers, cache_tools_list=cache_tools)
                 else:
                     logger.error(f"Unsupported MCP server type '{server_type}' for server: {server_name}")
-                    continue
+                    continue # Correct indentation
 
                 if server_instance:
                     logger.info(f"Attempting to start MCP server: {server_name} ({display_name})")
@@ -436,10 +438,10 @@ async def main():
             logger.error(f"Error starting one or more MCP servers: {e}", exc_info=True)
             # Depending on requirements, might want to exit or continue without failed servers
 
-        logger.info(f"Active MCP servers: {list(active_mcp_servers_map.keys())}")
-        logger.info("-------------------- Finished loading MCP servers --------------------")
+            logger.info(f"Active MCP servers: {list(active_mcp_servers_map.keys())}")
+            logger.info("-------------------- Finished loading MCP servers --------------------")
 
-        # Inside the main function, before starting MCP servers
+            # Inside the main function, before starting MCP servers
         for server_name in required_mcp_server_names:
             if server_name in mcp_server_configs:
                 config = mcp_server_configs[server_name]
@@ -472,75 +474,75 @@ async def main():
                             except Exception as e:
                                 logger.error(f"  Failed to create directory: {e}")
 
-        # Second pass: Initialize agents, clients, and runtimes using the active servers
-        logger.info("Initializing agents, clients, and runtimes...")
-        all_tasks = [] # Collect all client and runtime tasks here
-        for char_file, character_data in agent_configs.items():
-            try:
-                agent_name_log = character_data.get("name", char_file) # Use agent name for logging
-                username = character_data.get("username")
-                supported_clients = character_data.get("clients", [])
-                required_servers_for_agent = character_data.get("mcp_servers", [])
-                
-                # Get the active server instances needed by this agent
-                agent_mcp_instances = [active_mcp_servers_map[name] for name in required_servers_for_agent if name in active_mcp_servers_map]
-                if len(agent_mcp_instances) != len(required_servers_for_agent):
-                     missing = set(required_servers_for_agent) - set(active_mcp_servers_map.keys())
-                     logger.warning(f"Agent {agent_name_log} requires MCP servers that failed to start or are not configured: {missing}")
+            # Second pass: Initialize agents, clients, and runtimes using the active servers
+            logger.info("Initializing agents, clients, and runtimes...")
+            all_tasks = [] # Collect all client and runtime tasks here
+            for char_file, character_data in agent_configs.items():
+                try: # Correct alignment with 'for' loop
+                    agent_name_log = character_data.get("name", char_file) # Use agent name for logging
+                    username = character_data.get("username")
+                    supported_clients = character_data.get("clients", [])
+                    required_servers_for_agent = character_data.get("mcp_servers", []) # Correct indentation
+                    
+                    # Get the active server instances needed by this agent
+                    agent_mcp_instances = [active_mcp_servers_map[name] for name in required_servers_for_agent if name in active_mcp_servers_map]
+                    if len(agent_mcp_instances) != len(required_servers_for_agent):
+                        missing = set(required_servers_for_agent) - set(active_mcp_servers_map.keys())
+                        logger.warning(f"Agent {agent_name_log} requires MCP servers that failed to start or are not configured: {missing}")
 
-                # Create a placeholder context for this agent run if needed
-                # In a real app, this might load user data, session info, etc.
-                agent_context = {"user_id": f"{agent_name_log}_user", "session_id": f"{agent_name_log}_session"} # Example context
+                    # Create a placeholder context for this agent run if needed
+                    # In a real app, this might load user data, session info, etc.
+                    agent_context = {"user_id": f"{agent_name_log}_user", "session_id": f"{agent_name_log}_session"} # Example context
 
-                # Initialize agent and potentially the runtime ONCE per character file
-                agent, memory, continuous_runtime = await initialize_agent(
-                    char_file,
-                    client="discord" if "Discord" in supported_clients else "generic", # Determine primary client type for prompt?
-                    active_mcp_servers=agent_mcp_instances,
-                    context=agent_context # Pass the context
-                )
+                    # Initialize agent and potentially the runtime ONCE per character file
+                    agent, memory, agent_runtime = await initialize_agent( # Renamed variable
+                        char_file,
+                        client="discord" if "Discord" in supported_clients else "generic", # Determine primary client type for prompt?
+                        active_mcp_servers=agent_mcp_instances,
+                        context=agent_context # Pass the context
+                    )
 
-                # Initialize clients for this agent, using the SAME agent instance
-                if "Discord" in supported_clients:
-                    discord_token = os.getenv(f"{username}_DISCORD_API_TOKEN")
-                    if discord_token:
-                        discord_client = DiscordAgentClient(agent, memory) # Use already initialized agent/memory
-                        discord_config = character_data.get("discord_config", {})
-                        discord_client.initial_channel = discord_config.get("initial_channel")
-                        discord_client.initial_message = discord_config.get("initial_message")
-                        all_tasks.append(asyncio.create_task(discord_client.start(discord_token)))
-                    else:
-                        logger.error(f"Missing Discord token for {username}")
+                    # Initialize clients for this agent, using the SAME agent instance
+                    if "Discord" in supported_clients: # Correct indentation
+                        discord_token = os.getenv(f"{username}_DISCORD_API_TOKEN")
+                        if discord_token:
+                            discord_client = DiscordAgentClient(agent, memory) # Use already initialized agent/memory
+                            discord_config = character_data.get("discord_config", {})
+                            discord_client.initial_channel = discord_config.get("initial_channel")
+                            discord_client.initial_message = discord_config.get("initial_message")
+                            all_tasks.append(asyncio.create_task(discord_client.start(discord_token)))
+                        else:
+                            logger.error(f"Missing Discord token for {username}")
 
-                if "Instagram" in supported_clients:
-                    instagram_token = os.getenv(f"{username}_INSTAGRAM_ACCESS_TOKEN")
-                    if instagram_token:
-                        # Use the SAME agent instance initialized above
-                        instagram_client = InstagramAgentClient(agent, memory) # Re-use agent/memory
-                        all_tasks.append(asyncio.create_task(instagram_client.run(instagram_token)))
-                    else:
-                        logger.error(f"Missing Instagram token for {username}")
+                    if "Instagram" in supported_clients: # Correct indentation
+                        instagram_token = os.getenv(f"{username}_INSTAGRAM_ACCESS_TOKEN")
+                        if instagram_token:
+                            # Use the SAME agent instance initialized above
+                            instagram_client = InstagramAgentClient(agent, memory) # Re-use agent/memory
+                            all_tasks.append(asyncio.create_task(instagram_client.run(instagram_token)))
+                        else:
+                            logger.error(f"Missing Instagram token for {username}")
 
-                # Add other client initializations here...
+                    # Add other client initializations here...
 
-                # Start Continuous Runtime ONCE per agent if initialized
-                if continuous_runtime:
-                    logger.info(f"Starting ContinuousRuntime for {agent.name}")
-                    runtime_task = asyncio.create_task(continuous_runtime.run_continuously())
-                    all_tasks.append(runtime_task)
+                    # Start Agent Runtime ONCE per agent if initialized # Correct indentation & comment
+                    if agent_runtime: # Renamed variable
+                        logger.info(f"Starting AgentRuntime for {agent.name}") # Updated log
+                        runtime_task = asyncio.create_task(agent_runtime.run_continuously()) # Renamed variable
+                        all_tasks.append(runtime_task)
 
-            except Exception as e:
-                logger.error(f"Error initializing agent/client/runtime from {char_file}: {e}", exc_info=True)
+                except Exception as e: # Correct alignment with 'try'
+                    logger.error(f"Error initializing agent/client/runtime from {char_file}: {e}", exc_info=True)
 
-        # Keep the main task running while client and runtime tasks are active
-        if all_tasks:
-            logger.info("-------------------------------- Agents Starting --------------------------------")
-            logger.info(f"Running {len(all_tasks)} task(s) (clients and runtimes)...")
-            await asyncio.gather(*all_tasks)
+            # Keep the main task running while client and runtime tasks are active # Correct alignment with 'for' loop
+            if all_tasks:
+                logger.info("-------------------------------- Agents Starting --------------------------------")
+                logger.info(f"Running {len(all_tasks)} task(s) (clients and runtimes)...")
+                await asyncio.gather(*all_tasks)
         else:
             logger.error("No clients or runtimes were successfully initialized to run.")
 
-    logger.info("All MCP servers shut down.")
+    logger.info("All MCP servers shut down.") # This should be outside the trace block
 
 
 if __name__ == "__main__":

@@ -51,8 +51,8 @@
     * Initial MCP integration test (`tests/test_mcp_integration.py`) created for filesystem server.
 * **Proactive Goal-Driven Runtime (Initial Implementation Complete):**
     * NocoDB Schema Design (`SOPs`, `SOP_Steps`, `AgentTasks`).
-    * `ContinuousRuntime` Class Implementation (`src/carrier/runtime/continuous_runtime.py`).
-    * `run_agents.py` Integration for `ContinuousRuntime`.
+    * `AgentRuntime` Class Implementation (`src/carrier/runtime/agent_runtime.py`). # Renamed
+    * `run_agents.py` Integration for `AgentRuntime`. # Renamed
     * Initial NocoDB data population for `TeslaFan` agent (`DailyNewsReport` SOP).
 
 ## What's Left to Build
@@ -167,8 +167,8 @@
     * [✓] Initial test script (`tests/test_mcp_integration.py`) (March 28, 2025)
 * [✓] Proactive Goal-Driven Runtime (Initial Implementation):
     * [✓] NocoDB Schema Design (`SOPs`, `SOP_Steps`, `AgentTasks`) (April 10, 2025)
-    * [✓] `ContinuousRuntime` Class Implementation (`src/carrier/runtime/continuous_runtime.py`) (April 10, 2025)
-    * [✓] `run_agents.py` Integration for `ContinuousRuntime` (April 10, 2025)
+    * [✓] `AgentRuntime` Class Implementation (`src/carrier/runtime/agent_runtime.py`) (April 10, 2025) # Renamed
+    * [✓] `run_agents.py` Integration for `AgentRuntime` (April 10, 2025) # Renamed
     * [✓] Initial NocoDB Data Population (`TeslaFan` SOP/Steps/Task) (April 11, 2025)
 * [ ] Core component implementation (Refinement):
     * [ ] Agent Runtime (Refine based on Runner)
@@ -183,8 +183,8 @@
 
 ## Next Tasks
 1.  **Proactive Runtime Testing & Refinement:**
-    *   Run `run_agents.py` and monitor logs for `TeslaFan`'s `ContinuousRuntime`.
-    *   Verify `ContinuousRuntime` initialization and task resumption (`_initialize_tasks`).
+    *   Run `run_agents.py` and monitor logs for `TeslaFan`'s `AgentRuntime`. # Renamed
+    *   Verify `AgentRuntime` initialization and task resumption (`_initialize_tasks`). # Renamed
     *   Test execution of `DailyNewsReport` SOP steps (`call_tool`, `log_message`).
     *   Test parameter resolution and environment updates.
     *   Test status transitions and error handling logic.
@@ -218,6 +218,6 @@ The project has made significant progress with the implementation of the memory 
 
 The MCP integration uses a centralized configuration file (`config/mcp_servers.json`) and manages server lifecycles efficiently in `run_agents.py`. Agents can now list their available tools, including those provided by MCP servers.
 
-A new `ContinuousRuntime` has been implemented to enable proactive, goal-driven behavior based on SOPs defined in NocoDB, running alongside the existing reactive message loop. Initial data for the `TeslaFan` agent's `DailyNewsReport` SOP has been populated (though manual entry was required due to MCP tool issues).
+A new `AgentRuntime` (formerly `ContinuousRuntime`) has been implemented to enable proactive, goal-driven behavior based on SOPs defined in NocoDB, running alongside the existing reactive message loop. Initial data for the `TeslaFan` agent's `DailyNewsReport` SOP has been populated (though manual entry was required due to MCP tool issues). # Renamed
 
-The next phase involves running the system and thoroughly testing the `ContinuousRuntime`'s execution logic using the populated NocoDB data. Continued development of the memory system and refinement of MCP integration (including debugging the NocoDB tool) remain parallel priorities.
+The next phase involves running the system and thoroughly testing the `AgentRuntime`'s execution logic using the populated NocoDB data. Continued development of the memory system and refinement of MCP integration (including debugging the NocoDB tool) remain parallel priorities. # Renamed

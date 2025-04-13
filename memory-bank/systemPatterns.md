@@ -26,8 +26,8 @@ graph TD
     end
 
     subgraph ProactiveLoop [Proactive Goal Loop]
-        CR[Continuous Runtime] --> Agent[Agent Instance]
-        CR --> NocoDB[(NocoDB MCP)]
+        AR[Agent Runtime] --> Agent[Agent Instance] # Renamed CR to AR
+        AR --> NocoDB[(NocoDB MCP)] # Renamed CR to AR
         Agent --> J
         Agent --> I
     end
@@ -232,16 +232,16 @@ async with contextlib.AsyncExitStack() as stack:
     for char_file in character_files:
         agent_mcp_names = get_agent_mcp_names(char_file)
         agent_active_servers = [active_servers_map[name] for name in agent_mcp_names if name in active_servers_map]
-        # Unpack agent, memory, and potentially the continuous_runtime
-        agent, memory, continuous_runtime = await initialize_agent(char_file, active_mcp_servers=agent_active_servers)
+        # Unpack agent, memory, and potentially the agent_runtime
+        agent, memory, agent_runtime = await initialize_agent(char_file, active_mcp_servers=agent_active_servers) # Renamed variable
 
         # ... start client task (e.g., Discord) ...
         # client_task = asyncio.create_task(run_discord_client(agent, ...))
         # all_tasks.append(client_task)
 
-        # Start continuous runtime task if it exists
-        if continuous_runtime:
-            runtime_task = asyncio.create_task(continuous_runtime.run_continuously())
+        # Start agent runtime task if it exists
+        if agent_runtime: # Renamed variable
+            runtime_task = asyncio.create_task(agent_runtime.run_continuously()) # Renamed variable
             all_tasks.append(runtime_task)
 
     # ... await asyncio.gather(all_tasks) ...
@@ -260,7 +260,7 @@ The central coordinator that manages the entire system:
 - Handles evaluation and memory storage
 - Manages multiple client interfaces (Reactive Loop)
 
-### Continuous Runtime (New)
+### Agent Runtime (New) # Renamed section
 Manages the proactive execution of agent goals based on SOPs:
 - Runs as a separate async task per agent with goals.
 - Periodically checks `AgentTasks` table in NocoDB for tasks assigned to its agent.
@@ -274,7 +274,7 @@ Manages the proactive execution of agent goals based on SOPs:
 ### Agent Instance (Conceptual)
 Represents the initialized agent object used by both reactive and proactive loops:
 - Holds configuration (name, model, instructions).
-- Provides the `call_tool` and `call_mcp_tool` (or equivalent) methods used by `ContinuousRuntime` and `Action Manager`.
+- Provides the `call_tool` and `call_mcp_tool` (or equivalent) methods used by `AgentRuntime` and `Action Manager`. # Renamed reference
 - Accesses available built-in tools (`Local Tools`) and `MCP Servers`.
 
 ### Message Manager
@@ -379,46 +379,46 @@ sequenceDiagram
     DiscordClient->>Discord: Send Message
 ```
 
-### Proactive Continuous Runtime Flow (Simplified)
+### Proactive Agent Runtime Flow (Simplified) # Renamed section title
 
 ```mermaid
 sequenceDiagram
     participant Runner(run_agents.py)
-    participant CR(Continuous Runtime)
+    participant AR(Agent Runtime) # Renamed participant
     participant NocoDB_MCP
     participant AgentInstance
     participant Tools(Local/MCP)
 
-    Runner->>CR: Start run_continuously() loop
+    Runner->>AR: Start run_continuously() loop # Renamed participant
     loop Periodic Check (e.g., every 5s)
-        CR->>NocoDB_MCP: Fetch Active Tasks (retrieve_records AgentTasks where agent=self, status=active)
-        NocoDB_MCP->>CR: Return Task List
-        Note over CR: Iterate through tasks
-        CR->>NocoDB_MCP: Fetch Task State (retrieve_record AgentTasks by task_id)
-        NocoDB_MCP->>CR: Return Task State
+        AR->>NocoDB_MCP: Fetch Active Tasks (retrieve_records AgentTasks where agent=self, status=active) # Renamed participant
+        NocoDB_MCP->>AR: Return Task List # Renamed participant
+        Note over AR: Iterate through tasks # Renamed participant
+        AR->>NocoDB_MCP: Fetch Task State (retrieve_record AgentTasks by task_id) # Renamed participant
+        NocoDB_MCP->>AR: Return Task State # Renamed participant
         alt Check Control Signal/Status
-            CR->>CR: If Stop/Pause/Waiting, handle & continue loop
+            AR->>AR: If Stop/Pause/Waiting, handle & continue loop # Renamed participant
         end
-        CR->>NocoDB_MCP: Fetch Step Definition (retrieve_record SOP_Steps by current_step_id)
-        NocoDB_MCP->>CR: Return Step Definition
-        CR->>CR: Resolve Step Parameters (from env, last_result)
+        AR->>NocoDB_MCP: Fetch Step Definition (retrieve_record SOP_Steps by current_step_id) # Renamed participant
+        NocoDB_MCP->>AR: Return Step Definition # Renamed participant
+        AR->>AR: Resolve Step Parameters (from env, last_result) # Renamed participant
         opt Execute Step Action
             alt action == 'call_tool'
-                CR->>AgentInstance: Call Tool (agent.call_tool / agent.call_mcp_tool)
+                AR->>AgentInstance: Call Tool (agent.call_tool / agent.call_mcp_tool) # Renamed participant
                 AgentInstance->>Tools: Execute Tool
                 Tools->>AgentInstance: Tool Result
-                AgentInstance->>CR: Return Tool Result
+                AgentInstance->>AR: Return Tool Result # Renamed participant
             else action == 'wait'
-                CR->>CR: Calculate wait_until time
+                AR->>AR: Calculate wait_until time # Renamed participant
             else action == 'update_environment'
-                CR->>CR: Calculate environment changes
+                AR->>AR: Calculate environment changes # Renamed participant
             else action == 'log_message'
-                CR->>CR: Format log message
+                AR->>AR: Format log message # Renamed participant
             end
         end
-        CR->>CR: Determine next step / status / updates
-        CR->>NocoDB_MCP: Update Task State (update_record AgentTasks)
-        NocoDB_MCP->>CR: Confirm Update
+        AR->>AR: Determine next step / status / updates # Renamed participant
+        AR->>NocoDB_MCP: Update Task State (update_record AgentTasks) # Renamed participant
+        NocoDB_MCP->>AR: Confirm Update # Renamed participant
     end
 ```
 
