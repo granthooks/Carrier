@@ -5,26 +5,35 @@ Carrier follows a modular, event-driven architecture based on a central runtime 
 
 ```mermaid
 graph TD
-    A[Agent Runtime] --> B[Message Manager]
-    A --> C[State Manager]
-    A --> D[Action Manager]
-    A --> E[Evaluation System]
-    A --> F[Memory System]
-    A --> G[Provider System]
-    A --> J[MCP Servers]
+    subgraph ReactiveLoop [Reactive Message Loop]
+        A[Agent Runtime] --> B[Message Manager]
+        A --> C[State Manager]
+        A --> D[Action Manager]
+        A --> E[Evaluation System]
+        A --> F[Memory System]
+        A --> G[Provider System]
 
-    B --> F
-    C --> F
-    D --> G
-    D --> J
-    E --> G
-    
-    H1[Discord Client] --> A
-    H2[Instagram Client] --> A
-    H3[Other Clients] -.-> A
-    A --> I[Local Tools]
-    
-    F --> F1[Message Manager]
+        B --> F
+        C --> F
+        D --> G
+        D --> J[MCP Servers]
+        D --> I[Local Tools]
+        E --> G
+        
+        H1[Discord Client] --> A
+        H2[Instagram Client] --> A
+        H3[Other Clients] -.-> A
+    end
+
+    subgraph ProactiveLoop [Proactive Goal Loop]
+        CR[Continuous Runtime] --> Agent[Agent Instance]
+        CR --> NocoDB[(NocoDB MCP)]
+        Agent --> J
+        Agent --> I
+    end
+
+    subgraph SharedServices [Shared Services]
+        F --> F1[Message Manager]
     F --> F2[Description Manager]
     F --> F3[Lore Manager]
     F --> F4[Documents Manager]
@@ -223,10 +232,19 @@ async with contextlib.AsyncExitStack() as stack:
     for char_file in character_files:
         agent_mcp_names = get_agent_mcp_names(char_file)
         agent_active_servers = [active_servers_map[name] for name in agent_mcp_names if name in active_servers_map]
-        agent, memory = await initialize_agent(char_file, active_mcp_servers=agent_active_servers)
-        # ... start client task ...
+        # Unpack agent, memory, and potentially the continuous_runtime
+        agent, memory, continuous_runtime = await initialize_agent(char_file, active_mcp_servers=agent_active_servers)
 
-    # ... await asyncio.gather(client_tasks) ...
+        # ... start client task (e.g., Discord) ...
+        # client_task = asyncio.create_task(run_discord_client(agent, ...))
+        # all_tasks.append(client_task)
+
+        # Start continuous runtime task if it exists
+        if continuous_runtime:
+            runtime_task = asyncio.create_task(continuous_runtime.run_continuously())
+            all_tasks.append(runtime_task)
+
+    # ... await asyncio.gather(all_tasks) ...
 
 # Servers are automatically stopped when exiting the 'async with' block
 ```
@@ -240,10 +258,27 @@ The central coordinator that manages the entire system:
 - Manages the state
 - Coordinates action execution
 - Handles evaluation and memory storage
-- Manages multiple client interfaces
+- Manages multiple client interfaces (Reactive Loop)
+
+### Continuous Runtime (New)
+Manages the proactive execution of agent goals based on SOPs:
+- Runs as a separate async task per agent with goals.
+- Periodically checks `AgentTasks` table in NocoDB for tasks assigned to its agent.
+- Fetches task state and corresponding SOP/step definitions from NocoDB.
+- Executes steps (tool calls, waits, environment updates) via the associated `Agent Instance`.
+- Updates task status, progress, and environment in NocoDB.
+- Handles control signals (Pause, Stop) from NocoDB.
+- Relies on the `nocodb` MCP server for database interactions.
+- Validates required NocoDB tools on initialization.
+
+### Agent Instance (Conceptual)
+Represents the initialized agent object used by both reactive and proactive loops:
+- Holds configuration (name, model, instructions).
+- Provides the `call_tool` and `call_mcp_tool` (or equivalent) methods used by `ContinuousRuntime` and `Action Manager`.
+- Accesses available built-in tools (`Local Tools`) and `MCP Servers`.
 
 ### Message Manager
-Handles all aspects of message processing:
+Handles all aspects of reactive message processing:
 - Receives messages from clients
 - Standardizes message format
 - Adds embeddings for semantic search
@@ -314,7 +349,7 @@ Handles Instagram-specific interactions:
 
 ## Data Flow
 
-### Discord Client Flow
+### Reactive Discord Client Flow (Simplified)
 
 ```mermaid
 sequenceDiagram
@@ -331,24 +366,62 @@ sequenceDiagram
     
     Discord->>DiscordClient: Message Event
     DiscordClient->>DiscordClient: Detect Mention
-    DiscordClient->>Runtime: Process Message
-    Runtime->>MessageManager: Process Message
-    MessageManager->>MemorySystem: Store Message
-    Runtime->>StateManager: Compose State
-    StateManager->>MemorySystem: Retrieve Context
-    StateManager->>Runtime: Return State
+    DiscordClient->>Runtime: Process Incoming Message
+    Runtime->>MessageManager: Store Message
+    Runtime->>StateManager: Compose State (incl. Memory)
     Runtime->>LLMProvider: Generate Response
-    LLMProvider->>Runtime: Return Response (may include local tool or MCP tool call)
-    Runtime->>ActionManager: Execute Actions/Tools
-    ActionManager-->>MCPServers: Call MCP Tool (if applicable)
-    MCPServers-->>ActionManager: Return MCP Tool Result
-    ActionManager->>Runtime: Return Action/Tool Results
-    Runtime->>Evaluator: Evaluate Response
-    Evaluator->>Runtime: Return Evaluation
+    LLMProvider->>Runtime: LLM Response (may request tool use)
+    Runtime->>ActionManager: Execute Tool (Built-in or MCP via Agent Instance)
+    ActionManager->>Runtime: Tool Result
+    Runtime->>Evaluator: Evaluate
     Runtime->>MemorySystem: Store Response
-    Runtime->>DiscordClient: Return Response
+    Runtime->>DiscordClient: Send Response Message
     DiscordClient->>Discord: Send Message
 ```
+
+### Proactive Continuous Runtime Flow (Simplified)
+
+```mermaid
+sequenceDiagram
+    participant Runner(run_agents.py)
+    participant CR(Continuous Runtime)
+    participant NocoDB_MCP
+    participant AgentInstance
+    participant Tools(Local/MCP)
+
+    Runner->>CR: Start run_continuously() loop
+    loop Periodic Check (e.g., every 5s)
+        CR->>NocoDB_MCP: Fetch Active Tasks (retrieve_records AgentTasks where agent=self, status=active)
+        NocoDB_MCP->>CR: Return Task List
+        Note over CR: Iterate through tasks
+        CR->>NocoDB_MCP: Fetch Task State (retrieve_record AgentTasks by task_id)
+        NocoDB_MCP->>CR: Return Task State
+        alt Check Control Signal/Status
+            CR->>CR: If Stop/Pause/Waiting, handle & continue loop
+        end
+        CR->>NocoDB_MCP: Fetch Step Definition (retrieve_record SOP_Steps by current_step_id)
+        NocoDB_MCP->>CR: Return Step Definition
+        CR->>CR: Resolve Step Parameters (from env, last_result)
+        opt Execute Step Action
+            alt action == 'call_tool'
+                CR->>AgentInstance: Call Tool (agent.call_tool / agent.call_mcp_tool)
+                AgentInstance->>Tools: Execute Tool
+                Tools->>AgentInstance: Tool Result
+                AgentInstance->>CR: Return Tool Result
+            else action == 'wait'
+                CR->>CR: Calculate wait_until time
+            else action == 'update_environment'
+                CR->>CR: Calculate environment changes
+            else action == 'log_message'
+                CR->>CR: Format log message
+            end
+        end
+        CR->>CR: Determine next step / status / updates
+        CR->>NocoDB_MCP: Update Task State (update_record AgentTasks)
+        NocoDB_MCP->>CR: Confirm Update
+    end
+```
+
 
 ### Instagram Client Flow
 

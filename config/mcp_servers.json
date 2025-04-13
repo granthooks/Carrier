@@ -7,7 +7,9 @@
       "args": [
         "-y",
         "@modelcontextprotocol/server-filesystem",
-        "c:/gkh/documents/Projects/Carrier/mcp_workspace"
+        "C:/gkh/documents/Projects/Carrier/mcp_workspace",
+        "C:/gkh/documents/Projects/Carrier/mcp_workspace/characters",
+        "C:/gkh/documents/Projects/Carrier"
       ]
     },
     "brave-search": {
@@ -63,6 +65,20 @@
         "args": ["C:/Users/grant/AppData/Roaming/nvm/v23.3.0/node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js"],
         "env": {},
         "cache_tools_list": true
+    },
+    "nocodb": {
+      "name": "nocodb",
+      "type": "stdio",
+      "command": "C:\\Users\\grant\\.conda\\envs\\carrier\\python.exe",
+      "args": [
+        "C:\\gkh\\documents\\Projects\\Nocodb_MCP_Server\\nocodb_mcp_server.py"
+      ],
+      "env": {
+        "NOCODB_URL": "YOUR_NOCODB_URL_HERE",
+        "NOCODB_API_TOKEN": "YOUR_NOCODB_API_TOKEN_HERE",
+        "NOCODB_BASE_ID": "YOUR_NOCODB_BASE_ID_HERE"
+      },
+      "cache_tools_list": true
     }
   }
 }

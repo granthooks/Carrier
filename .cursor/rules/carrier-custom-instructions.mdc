@@ -55,3 +55,22 @@ alwaysApply: false
 - **Never hallucinate libraries or functions** – only use known, verified Python packages.
 - **Always confirm file paths and module names** exist before referencing them in code or tests.
 - **Never delete or overwrite existing code** unless explicitly instructed to or if part of a task from `activeContext.md`.
+
+- **Prioritize new features in Python 3.10+.**
+- **When explaining code, provide clear logical explanations and code comments.**
+- **When making suggestions, explain the rationale and potential trade-offs.**
+- **If code examples span multiple files, clearly indicate the file name.**
+- **Do not over-engineer solutions. Strive for simplicity and maintainability while still being efficient.**
+- **Favor modularity, but avoid over-modularization.**
+- **Use the most modern and efficient libraries when appropriate, but justify their use and ensure they don't add unnecessary complexity.**
+- **When providing solutions or examples, ensure they are self-contained and executable without requiring extensive modifications.**
+- **If a request is unclear or lacks sufficient information, ask clarifying questions before proceeding.**
+- **Always consider the security implications of your code, especially when dealing with user inputs and external data.**
+- **Actively use and promote best practices for the specific tasks at hand (LLM app development, data cleaning, demo creation, etc.).**
+
+- **Before attempting to insert data into a Nocodb table, first get the table's schema with nocodb MCP's get_schema(tablename).  That way the data types being inserted can be validated and properly formatted.**
+- **Do not put any comments in JSON!**
+- **If you need to search for information or aren't sure about something, use the Brave Search MCP**
+
+
+

@@ -1,10 +1,11 @@
 # Active Context: Carrier
 
 ## Current Focus
-* Testing and refining the newly implemented MCP (Model Context Protocol) server integration.
-* Enhancing error handling and logging for MCP server management.
-* Implementing and testing integration with additional MCP servers (beyond filesystem).
-* Implementing a robust memory system for Carrier agents (ongoing).
+* **Proactive Agent Runtime:** Implementing and refining the `ContinuousRuntime` for goal-driven agent behavior using NocoDB SOPs.
+* **NocoDB Integration:** Defining SOPs and AgentTasks, ensuring reliable interaction via the `nocodb` MCP server.
+* **Testing Proactive Loop:** Verifying task initialization, step execution (tool calls, waits, env updates), status transitions, and error handling.
+* **MCP Integration (Ongoing):** Testing integration with various MCP servers.
+* **Memory System (Ongoing):** Continuing development of the Supabase-based memory system.
 * Developing Supabase integration with PostgreSQL and vector extensions for memory storage (ongoing).
 * Creating specialized memory managers for different memory types.
 * Integrating memory system with agent runtime through hooks.
@@ -46,10 +47,27 @@
 * March 28, 2025: Added `list_available_tools` tool for agent introspection.
 * March 28, 2025: Updated `CarrierAgent` to store combined tool descriptions.
 * March 28, 2025: Created `tests/test_mcp_integration.py` with an initial test for the filesystem server.
+* **April 10, 2025: Planned Proactive Runtime:** Designed NocoDB schemas (`SOPs`, `SOP_Steps`, `AgentTasks`) for goal-driven execution.
+* **April 10, 2025: Implemented `ContinuousRuntime`:** Created `src/carrier/runtime/continuous_runtime.py` with logic for task processing, step execution, status management, and NocoDB interaction via MCP. Added validation for required NocoDB tools.
+* **April 10, 2025: Integrated `ContinuousRuntime`:** Modified `run_agents.py` to initialize and manage the `ContinuousRuntime` task alongside client tasks for agents with defined goals.
+* **April 11, 2025: Populated Initial NocoDB Data:** Successfully created initial SOP, Step, and AgentTask records for `TeslaFan` agent's `DailyNewsReport` goal using the `nocodb` MCP tool (after troubleshooting).
 
 ## Next Steps
-* **MCP Integration Refinement:**
-    * Thoroughly test integration with various MCP servers defined in `config/mcp_servers.json` (Brave, GitHub, Supabase, etc.).
+* **`ContinuousRuntime` Testing & Refinement:**
+    * Run `run_agents.py` and monitor logs for `TeslaFan`'s `ContinuousRuntime`.
+    * Verify task initialization (`_initialize_tasks` logic).
+    * Verify correct execution of different step actions (`call_tool`, `wait`, `update_environment`, `log_message`).
+    * Test parameter resolution (`environment`, `prior_step_result`).
+    * Test result mapping and environment updates.
+    * Validate status transitions (Running, Waiting, Paused, Completed, Error).
+    * Test error handling and jumps to `error_handling_step_id`.
+    * Test `control_signal` handling (Pause, Stop).
+    * Refine logging within the runtime.
+* **Agent Integration:**
+    * Ensure `agent.call_tool` and `agent.call_mcp_tool` (or equivalent) work correctly when called from `ContinuousRuntime`.
+    * Test the reactive flow's ability to query task status from `AgentTasks` via NocoDB tools.
+* **MCP Integration Refinement (Ongoing):**
+    * Thoroughly test integration with various MCP servers defined in `config/mcp_servers.json`.
     * Implement robust error handling for MCP server startup and tool calls within `run_agents.py`.
     * Ensure API keys/tokens are correctly loaded from `.env` and passed to servers.
     * Test the `list_available_tools` functionality.
@@ -114,18 +132,24 @@
 * Optimizing media file uploads for Instagram posting
 * Handling Instagram API publishing limits and quotas
 * Implementing robust error handling for Instagram media posting
-* **MCP Considerations (Post-Initial Implementation):**
+* **MCP Considerations (Ongoing):**
     * Monitoring the stability and resource usage of centrally managed MCP servers.
     * Refining error handling for scenarios where specific servers fail to start or respond.
     * Ensuring security when passing environment variables (like API keys) to server subprocesses.
     * Verifying compatibility as MCP servers are updated.
+* **Continuous Runtime Considerations:**
+    * Scalability of checking many tasks frequently.
+    * Robustness of NocoDB interactions (retries, error parsing).
+    * Complexity of `prior_step_result` handling if non-sequential results are needed.
+    * Interaction model between proactive tasks and reactive message handling (prioritization, interruption).
+    * Mechanism for creating new tasks in `AgentTasks` (manual, API, triggered by goals).
 
 ## Notes
-The project has successfully integrated the initial MCP server functionality using a centralized configuration (`config/mcp_servers.json`) and management approach within `run_agents.py`. Agents can now be configured to access tools from specified MCP servers, and the system handles starting/stopping these servers efficiently. A new `list_available_tools` tool allows agents to report their capabilities. The memory system implementation remains ongoing.
+The project has successfully integrated the initial MCP server functionality. A major architectural addition, the `ContinuousRuntime`, has been implemented to enable proactive, goal-driven agent behavior based on SOPs defined in NocoDB. This runtime runs as a separate asynchronous task for each eligible agent, processing steps defined in the `SOP_Steps` table and managing state in the `AgentTasks` table via the `nocodb` MCP server. Validation ensures the runtime only starts if required NocoDB tools are available.
 
-The implementation follows the 7-step runtime loop outlined in the project brief, with memory storage and retrieval integrated at appropriate points in the processing pipeline. The memory system uses Supabase with PostgreSQL and vector extensions for efficient semantic search, allowing agents to retrieve relevant memories based on content similarity.
+The existing reactive runtime loop (based on client messages) remains, and the proactive `ContinuousRuntime` operates alongside it. The reactive loop can query the `AgentTasks` table to provide status updates on proactive work.
 
-The current implementation provides a strong foundation for leveraging external tools via MCP. The next steps involve testing this integration thoroughly with various servers, refining error handling, and continuing the development of the memory system alongside the expanded tool capabilities.
+The next critical steps involve setting up the NocoDB tables with actual SOP data and thoroughly testing the `ContinuousRuntime`'s execution logic, state management, and interaction with the agent's tool execution capabilities. The memory system implementation also remains ongoing.
 </final_file_content>
 
 IMPORTANT: For any future changes to this file, use the final_file_content shown above as your reference. This content reflects the current state of the file, including any auto-formatting (e.g., if you used single quotes but the formatter converted them to double quotes). Always base your SEARCH/REPLACE operations on this final version to ensure accuracy.
